@@ -14,7 +14,7 @@ class LoginScreen extends StatefulWidget {
 
   final AuthService authService;
   final ValueChanged<String> onSignedIn;
-  final VoidCallback onStartDemoModex
+  final VoidCallback onStartDemoMode;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -249,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               isDemo
                                   ? 'LOCAL DEMO — simulated door data only. This mode cannot control Firebase devices.'
                                   : 'FIREBASE AUTH — access is limited to the configured administrator account.',
-                                style: const TextStyle(
+                              style: const TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.navy,
                                 height: 1.45,
