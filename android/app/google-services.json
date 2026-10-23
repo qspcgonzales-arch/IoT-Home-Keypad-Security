@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "737687406041",
+    "firebase_url": "https://smart-home-security-tip-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "smart-home-security-tip",
+    "storage_bucket": "smart-home-security-tip.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:737687406041:android:f22f9bf4f62f315f8605c8",
+        "android_client_info": {
+          "package_name": "IoT_SmartHome.Security"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNxF6nC2_gta_Ux_49qRIrMLxzOwNXPW8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

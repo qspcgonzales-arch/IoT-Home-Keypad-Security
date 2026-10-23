@@ -1,0 +1,53 @@
+enum UnlockCommandStatus { pending, accepted, unlocked, failed, expired }
+
+class UnlockCommand {
+  const UnlockCommand({
+    required this.id,
+    required this.type,
+    required this.status,
+    required this.requestedBy,
+    required this.createdAtMillis,
+    required this.expiresAtMillis,
+    this.message,
+  });
+
+  final String id;
+  final String type;
+  final UnlockCommandStatus status;
+  final String requestedBy;
+  final int createdAtMillis;
+  final int expiresAtMillis;
+  final String? message;
+
+  Map<String, Object?> toDatabaseRecord({required Object serverTimestamp}) => {
+    'type': type,
+    'status': switch (status) {
+      UnlockCommandStatus.pending => 'pending',
+      UnlockCommandStatus.accepted => 'accepted',
+      UnlockCommandStatus.unlocked => 'completed',
+      UnlockCommandStatus.failed => 'failed',
+      UnlockCommandStatus.expired => 'expired',
+    },
+    'requestedBy': requestedBy,
+    'createdAt': serverTimestamp,
+    'expiresAt': expiresAtMillis,
+  };
+
+  static UnlockCommandStatus? parseStatus(Object? value) => switch (value) {
+    'pending' => UnlockCommandStatus.pending,
+    'accepted' => UnlockCommandStatus.accepted,
+    'completed' => UnlockCommandStatus.unlocked,
+    'failed' => UnlockCommandStatus.failed,
+    'expired' => UnlockCommandStatus.expired,
+    _ => null,
+  };
+
+  static String labelFor(UnlockCommandStatus? status) => switch (status) {
+    UnlockCommandStatus.pending ||
+    UnlockCommandStatus.accepted => 'COMMAND PENDING',
+    UnlockCommandStatus.unlocked => 'UNLOCKED',
+    UnlockCommandStatus.failed => 'FAILED',
+    UnlockCommandStatus.expired => 'EXPIRED',
+    null => 'REMOTE UNLOCK',
+  };
+}

@@ -1,0 +1,18 @@
+{
+  "name": "smart-home-rules-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Realtime Database emulator tests for production and PROPOSED security rules. Nothing here deploys rules.",
+  "scripts": {
+    "pretest:proposed": "node -e \"require('fs').copyFileSync('../../database.rules.proposed.json','.proposed.rules.json')\"",
+    "test:proposed": "firebase emulators:exec --only database --project demo-smart-home --config firebase.test.json \"node --test test/proposed.test.js\"",
+    "test:lifecycle": "firebase emulators:exec --only database --project demo-smart-home --config firebase.test.json \"node --test test/lifecycle.test.js\"",
+    "test": "npm run test:proposed && npm run test:lifecycle"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^12.0.0",
+    "firebase-tools": "^14.0.0"
+  }
+}

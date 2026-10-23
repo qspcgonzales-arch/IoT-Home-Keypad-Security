@@ -1,0 +1,128 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "devices": {
+      "frontDoor": {
+        "isLocked": {
+          ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".validate": "newData.isBoolean()"
+        }
+      },
+      "gateway": {
+        "isOnline": {
+          ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".validate": "newData.isBoolean()"
+        },
+        "lastSeen": {
+          ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "mode": {
+          ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".validate": "newData.val() === 'simulated' || (newData.val() === 'hardware' && !(auth.uid === 'device-simulator'))"
+        }
+      }
+    },
+    "settings": {
+      "frontDoor": {
+        "unlockDurationSeconds": {
+          ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3'",
+          ".validate": "newData.isNumber() && newData.val() >= 4 && newData.val() <= 30 && newData.val() % 1 === 0"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "deviceRegistry": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['enabled', 'deviceId']) && newData.child('enabled').isBoolean() && newData.child('deviceId').isString() && newData.child('deviceId').val().length <= 64",
+        "enabled": {
+          ".validate": "newData.isBoolean()"
+        },
+        "deviceId": {
+          ".validate": "newData.isString()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "commands": {
+      ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || (root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true && query.orderByChild === 'status' && query.equalTo === 'pending' && query.limitToFirst <= 10))",
+      ".indexOn": [
+        "status"
+      ],
+      "$commandId": {
+        ".read": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+        ".write": "auth != null && ((auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' && !data.exists() && newData.exists() && newData.child('type').val() === 'unlock' && newData.child('status').val() === 'pending' && newData.child('requestedBy').val() === auth.uid && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 60000) || ((auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true) && data.exists() && newData.exists() && newData.child('type').val() === data.child('type').val() && newData.child('requestedBy').val() === data.child('requestedBy').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val() && ((data.child('status').val() === 'pending' && ((newData.child('status').val() === 'accepted' && data.child('expiresAt').val() >= now) || newData.child('status').val() === 'failed' || newData.child('status').val() === 'expired')) || (data.child('status').val() === 'accepted' && newData.child('acceptedAt').val() === data.child('acceptedAt').val() && newData.child('deviceId').val() === data.child('deviceId').val() && (newData.child('status').val() === 'completed' || newData.child('status').val() === 'failed' || newData.child('status').val() === 'expired')))))",
+        ".validate": "newData.hasChildren(['type', 'status', 'requestedBy', 'createdAt', 'expiresAt']) && newData.child('type').val() === 'unlock' && newData.child('requestedBy').isString() && newData.child('createdAt').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > newData.child('createdAt').val() && ((newData.child('status').val() === 'pending' && !newData.child('acceptedAt').exists() && !newData.child('acknowledgedAt').exists() && !newData.child('deviceId').exists() && !newData.child('message').exists()) || (newData.child('status').val() === 'accepted' && newData.hasChildren(['acceptedAt', 'deviceId']) && !newData.child('acknowledgedAt').exists() && !newData.child('message').exists()) || (newData.child('status').val() === 'completed' && newData.hasChildren(['acceptedAt', 'acknowledgedAt', 'deviceId', 'message'])) || ((newData.child('status').val() === 'failed' || newData.child('status').val() === 'expired') && newData.hasChildren(['acknowledgedAt', 'deviceId', 'message']) && (data.child('status').val() === 'accepted' ? newData.child('acceptedAt').exists() : !newData.child('acceptedAt').exists())))",
+        "type": {
+          ".validate": "newData.val() === 'unlock'"
+        },
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'accepted' || newData.val() === 'completed' || newData.val() === 'failed' || newData.val() === 'expired')"
+        },
+        "requestedBy": {
+          ".validate": "newData.isString() && newData.val().length <= 128"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "acceptedAt": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "acknowledgedAt": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "deviceId": {
+          ".validate": "((auth.uid === 'device-simulator' && newData.val() === 'local-device-simulator') || (!(auth.uid === 'device-simulator') && newData.val() === root.child('deviceRegistry').child(auth.uid).child('deviceId').val()))"
+        },
+        "message": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "auditLogs": {
+      ".read": "auth != null && auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3'",
+      ".indexOn": [
+        "timestamp"
+      ],
+      "$eventId": {
+        ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true) && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['type', 'description', 'timestamp', 'commandId', 'actorUid']) && (newData.child('type').val() === 'remoteUnlock' || newData.child('type').val() === 'automaticRelock' || newData.child('type').val() === 'commandFailed' || newData.child('type').val() === 'commandExpired' || newData.child('type').val() === 'accessGranted' || newData.child('type').val() === 'accessDenied' || newData.child('type').val() === 'securityLockout')",
+        "type": {
+          ".validate": "newData.isString()"
+        },
+        "description": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "commandId": {
+          ".validate": "newData.isString() && newData.val().length <= 128"
+        },
+        "actorUid": {
+          ".validate": "newData.isString() && newData.val().length <= 128"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
