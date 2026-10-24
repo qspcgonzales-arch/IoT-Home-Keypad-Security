@@ -18,9 +18,20 @@ const _firebaseEmulatorProjectId = String.fromEnvironment(
   'FIREBASE_EMULATOR_PROJECT_ID',
   defaultValue: 'demo-smart-home',
 );
+const _hardwareTestBuild = bool.fromEnvironment('HARDWARE_TEST_BUILD');
+const _configuredGatewayMode = String.fromEnvironment(
+  'GATEWAY_MODE',
+  defaultValue: 'simulated',
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (_hardwareTestBuild &&
+      (_firebaseEmulatorHost.isEmpty || _configuredGatewayMode != 'hardware')) {
+    runApp(const _HardwareTestConfigurationRequiredApp());
+    return;
+  }
+
   final firebaseOptions = _firebaseEmulatorHost.isEmpty
       ? DefaultFirebaseOptions.currentPlatform
       : FirebaseOptions(
@@ -34,18 +45,62 @@ Future<void> main() async {
   await Firebase.initializeApp(options: firebaseOptions);
   if (_firebaseEmulatorHost.isNotEmpty) {
     FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, 9099);
-    FirebaseDatabase.instance.useDatabaseEmulator(
-      _firebaseEmulatorHost,
-      9000,
-    );
+    FirebaseDatabase.instance.useDatabaseEmulator(_firebaseEmulatorHost, 9000);
   }
-  runApp(SmartHomeSecurityApp(authService: FirebaseAuthService()));
+  runApp(
+    SmartHomeSecurityApp(
+      authService: FirebaseAuthService(),
+      hardwareTestBuild: _hardwareTestBuild,
+    ),
+  );
+}
+
+class _HardwareTestConfigurationRequiredApp extends StatelessWidget {
+  const _HardwareTestConfigurationRequiredApp();
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Hardware Test Configuration Required',
+    home: Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'HARDWARE TEST BUILD BLOCKED',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'This build requires GATEWAY_MODE=hardware and an explicit '
+                  'FIREBASE_EMULATOR_HOST. Firebase was not initialized; '
+                  'production services will not be used.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class SmartHomeSecurityApp extends StatefulWidget {
-  const SmartHomeSecurityApp({super.key, required this.authService});
+  const SmartHomeSecurityApp({
+    super.key,
+    required this.authService,
+    this.hardwareTestBuild = false,
+  });
 
   final AuthService authService;
+  final bool hardwareTestBuild;
 
   @override
   State<SmartHomeSecurityApp> createState() => _SmartHomeSecurityAppState();
@@ -115,6 +170,7 @@ class _SmartHomeSecurityAppState extends State<SmartHomeSecurityApp> {
             authService: widget.authService,
             onSignedIn: _signIn,
             onStartDemoMode: _startDemoMode,
+            hardwareTestBuild: widget.hardwareTestBuild,
           )
         : SecurityShell(
             email: _signedInEmail!,

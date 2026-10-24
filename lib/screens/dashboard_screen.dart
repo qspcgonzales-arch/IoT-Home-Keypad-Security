@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/unlock_command.dart';
 import '../services/door_service.dart';
+import '../services/gateway_policy.dart';
 import '../theme/app_theme.dart';
 import '../widgets/event_tile.dart';
 import '../widgets/status_badge.dart';
@@ -53,23 +54,27 @@ class DashboardScreen extends StatelessWidget {
           : service.isLocked
           ? const Color(0xFF16794B)
           : const Color(0xFFB54708);
+      final expectsHardware = GatewayMode.configured == GatewayMode.hardware;
+      final gatewayModeMatches = expectsHardware
+          ? service.isHardware
+          : service.isSimulated;
       final gatewayLabel = service.isLoading
           ? 'LOADING'
           : !service.isDatabaseConnected
           ? 'OFFLINE'
           : !service.hasGatewayStatus
           ? 'UNKNOWN'
+          : !gatewayModeMatches
+          ? 'MODE MISMATCH'
           : service.isDeviceReady
           ? 'ONLINE'
           : service.isHardware && service.isOnline && !service.isArduinoReady
           ? 'ARDUINO OFFLINE'
           : 'OFFLINE';
-      final gatewayColor =
-          service.isLoading ||
-              (service.isDatabaseConnected && !service.hasGatewayStatus)
-          ? AppTheme.muted
-          : service.isDatabaseConnected && service.isOnline
+      final gatewayColor = gatewayLabel == 'ONLINE'
           ? const Color(0xFF16794B)
+          : gatewayLabel == 'LOADING' || gatewayLabel == 'UNKNOWN'
+          ? AppTheme.muted
           : const Color(0xFFB42318);
       final commandStatus = service.remoteUnlockStatus;
       final unlockButtonLabel = switch (commandStatus) {
@@ -246,6 +251,8 @@ class DashboardScreen extends StatelessWidget {
                         Text(
                           service.canSimulateConnectivity
                               ? 'LOCAL DEMO — not connected to Firebase'
+                              : expectsHardware
+                              ? 'HARDWARE TEST — physical gateway expected'
                               : service.isHardware
                               ? 'ESP32 gateway (hardware mode)'
                               : service.isSimulated
@@ -257,7 +264,11 @@ class DashboardScreen extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          service.isSimulated
+                          service.canSimulateConnectivity
+                              ? 'SIMULATED • command acknowledgements enabled'
+                              : expectsHardware && !service.isHardware
+                              ? 'PHYSICAL • waiting for matching hardware mode'
+                              : service.isSimulated
                               ? 'SIMULATED • command acknowledgements enabled'
                               : service.isHardware
                               ? service.isArduinoReady

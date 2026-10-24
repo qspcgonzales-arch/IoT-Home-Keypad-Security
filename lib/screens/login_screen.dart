@@ -10,11 +10,13 @@ class LoginScreen extends StatefulWidget {
     required this.authService,
     required this.onSignedIn,
     required this.onStartDemoMode,
+    this.hardwareTestBuild = false,
   });
 
   final AuthService authService;
   final ValueChanged<String> onSignedIn;
   final VoidCallback onStartDemoMode;
+  final bool hardwareTestBuild;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -142,7 +144,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isDemo
+                      widget.hardwareTestBuild
+                          ? 'HARDWARE TEST BUILD — isolated Firebase Emulator only. Live Firebase is disabled.'
+                          : isDemo
                           ? 'LOCAL DEMO MODE — sign in with the demo credentials below.'
                           : 'FIREBASE AUTH — sign in with your authorized administrator account.',
                       style: TextStyle(color: AppTheme.muted),
