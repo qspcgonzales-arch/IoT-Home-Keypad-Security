@@ -59,8 +59,8 @@ The reference projects use GPIO 13 for a servo (sources 3, 4, 8) and several str
 
 | Signal | Levels | Action |
 | --- | --- | --- |
-| Uno TX (A3) â†’ ESP32 RX (GPIO16) | 5 V â†’ 3.3 V input (not 5 V tolerant) | **Required:** level shifter or a resistor divider (for example 1 kÎ© + 2 kÎ©). Never connect directly |
-| ESP32 TX (GPIO17) â†’ Uno RX (A2) | 3.3 V â†’ 5 V logic | The ATmega328P input-high threshold is about 0.6Ã—VCC (â‰ˆ3 V), so 3.3 V is marginal. Prefer a bidirectional shifter for both lines |
+| Uno TX (A3) to ESP32 RX (GPIO16) | 5 V to 3.3 V input (not 5 V tolerant) | **Required:** down-shift this push-pull UART signal with a proper divider or UART-compatible buffer. Never connect directly |
+| ESP32 TX (GPIO17) to Uno RX (A2) | 3.3 V to Uno logic | Use a direction-fixed push-pull buffer/translator meeting the actual Uno input-high requirement; do not rely on a marginal direct connection |
 | I2C LCD | 5 V on the Uno bus only | Keep it off the ESP32 |
 | Common ground | Uno, ESP32, servo supply, sensors | **Required** |
 
@@ -68,7 +68,7 @@ The reference projects use GPIO 13 for a servo (sources 3, 4, 8) and several str
 
 | Load | Proposal | Reason |
 | --- | --- | --- |
-| Servo (SG90) | Separate 5 V supply rated at 1 A or more, ground joined to the Uno GND, + **not** connected to the Uno 5V pin | [Source 5]: about 100 mA free, up to about 650 mA at stall; USB can brown out the Uno |
+| Servo (SG90) | Separate regulated supply sized for the exact servo's measured/datasheet stall current; join signal ground to Uno GND; + **not** connected to Uno 5V | The earlier 1 A value is provisional only; clone servo current and supply margin are unverified |
 | Add a bulk capacitor (for example 470â€“1000 ÂµF) across the servo supply | [Assumption] | Reduces supply dips when the servo starts |
 | ESP32 | Own USB or regulated 5 V supply | Wi-Fi peaks are current-hungry [Assumption] |
 | Uno, LCD, IR, keypad | USB or a 7â€“12 V barrel jack | Low current |
@@ -88,9 +88,10 @@ mechanism exists. The SG90 is a bench stand-in for the actuator only.
 The ESP32 will use its own Firebase Auth email/password user, registered in a `deviceRegistry/$uid` node
 that only the Firebase Console or Admin SDK can write. It never holds the administrator login, the
 simulator's service account or any Admin SDK credential. Details, proposed rules and the revocation
-procedure are in `SECURITY_ARCHITECTURE.md` and `database.rules.proposed.json`. The deployed
-`database.rules.json` is unchanged, so the real ESP32 still cannot write to Firebase and the firmware
-keeps the `StubCloudClient`.
+procedure are in `SECURITY_ARCHITECTURE.md` and `database.rules.proposed.json`. The ESP32 REST client
+is implemented and emulator-tested, but no device identity has been provisioned and the deployed
+`database.rules.json` remains unchanged. Keep firmware configured for the isolated emulator until
+production access and physical testing are explicitly approved.
 
 ## Uno memory budget (compiled, measured)
 
