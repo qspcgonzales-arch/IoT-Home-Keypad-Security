@@ -40,6 +40,14 @@ class FirebaseRealtimeDatabaseService extends DoorService {
         .ref('devices/gateway/mode')
         .onValue
         .listen(_onModeValue, onError: _onDatabaseError);
+    _arduinoConnectedSubscription = _database
+        .ref('devices/gateway/arduinoConnected')
+        .onValue
+        .listen(_onArduinoConnectedValue, onError: _onDatabaseError);
+    _arduinoHeartbeatSubscription = _database
+        .ref('devices/gateway/arduinoLastSeen')
+        .onValue
+        .listen(_onArduinoHeartbeatValue, onError: _onDatabaseError);
     _auditSubscription = newestAuditEvents().onValue.listen(
       _onAuditValue,
       onError: _onDatabaseError,
@@ -76,6 +84,8 @@ class FirebaseRealtimeDatabaseService extends DoorService {
   StreamSubscription<DatabaseEvent>? _gatewaySubscription;
   StreamSubscription<DatabaseEvent>? _heartbeatSubscription;
   StreamSubscription<DatabaseEvent>? _modeSubscription;
+  StreamSubscription<DatabaseEvent>? _arduinoConnectedSubscription;
+  StreamSubscription<DatabaseEvent>? _arduinoHeartbeatSubscription;
   StreamSubscription<DatabaseEvent>? _auditSubscription;
   StreamSubscription<DatabaseEvent>? _connectionSubscription;
   StreamSubscription<DatabaseEvent>? _unlockDurationSubscription;
@@ -88,9 +98,13 @@ class FirebaseRealtimeDatabaseService extends DoorService {
   bool _gatewayLoaded = false;
   bool _heartbeatLoaded = false;
   bool _modeLoaded = false;
+  bool _arduinoConnectedLoaded = false;
+  bool _arduinoHeartbeatLoaded = false;
   bool _auditLoaded = false;
   bool _connectionKnown = false;
   bool _isDatabaseConnected = false;
+  bool _arduinoConnected = false;
+  int? _arduinoLastSeenMillis;
   bool _hasDoorStatus = false;
   bool _hasGatewayStatus = false;
   String? _feedback;
@@ -119,6 +133,8 @@ class FirebaseRealtimeDatabaseService extends DoorService {
           _gatewayLoaded &&
           _heartbeatLoaded &&
           _modeLoaded &&
+          (_policy.expectedMode != GatewayMode.hardware ||
+              (_arduinoConnectedLoaded && _arduinoHeartbeatLoaded)) &&
           _auditLoaded) &&
       _feedback == null &&
       !(_connectionKnown && !_isDatabaseConnected);
@@ -141,10 +157,16 @@ class FirebaseRealtimeDatabaseService extends DoorService {
   @override
   bool get isHardware => _status.gatewayMode == GatewayMode.hardware.wireValue;
   @override
+  bool get isArduinoReady => _policy.isArduinoHeartbeatFresh(
+    reportedConnected: _arduinoConnected,
+    lastSeenMillis: _arduinoLastSeenMillis,
+    nowMillis: _clock().millisecondsSinceEpoch,
+  );
+  @override
   bool get canRequestUnlock =>
       _policy.modeMatches(_status.gatewayMode) &&
       _isDatabaseConnected &&
-      isOnline &&
+      isDeviceReady &&
       _hasDoorStatus &&
       _status.isLocked &&
       !isPending &&
@@ -267,6 +289,9 @@ class FirebaseRealtimeDatabaseService extends DoorService {
           ? 'Command unavailable: no authenticated physical device is online.'
           : 'Command unavailable: no authenticated simulator is online.';
     }
+    if (isHardware && !isArduinoReady) {
+      return 'Command unavailable: Arduino UART has not been verified.';
+    }
     if (!isOnline) return 'Command unavailable: device heartbeat is offline.';
     if (!_hasDoorStatus) return 'Command unavailable: door status is unknown.';
     if (!_status.isLocked) {
@@ -334,6 +359,23 @@ class FirebaseRealtimeDatabaseService extends DoorService {
       gatewayLastSeenMillis: _status.gatewayLastSeenMillis,
       gatewayMode: value is String ? value : null,
     );
+    _clearAvailabilityFeedbackIfRecovered();
+    notifyListeners();
+  }
+
+  void _onArduinoConnectedValue(DatabaseEvent event) {
+    if (_disposed) return;
+    _arduinoConnectedLoaded = true;
+    _arduinoConnected = event.snapshot.value == true;
+    _clearAvailabilityFeedbackIfRecovered();
+    notifyListeners();
+  }
+
+  void _onArduinoHeartbeatValue(DatabaseEvent event) {
+    if (_disposed) return;
+    _arduinoHeartbeatLoaded = true;
+    final value = event.snapshot.value;
+    _arduinoLastSeenMillis = value is num ? value.toInt() : null;
     _clearAvailabilityFeedbackIfRecovered();
     notifyListeners();
   }
@@ -499,6 +541,8 @@ class FirebaseRealtimeDatabaseService extends DoorService {
     _gatewaySubscription?.cancel();
     _heartbeatSubscription?.cancel();
     _modeSubscription?.cancel();
+    _arduinoConnectedSubscription?.cancel();
+    _arduinoHeartbeatSubscription?.cancel();
     _auditSubscription?.cancel();
     _connectionSubscription?.cancel();
     _unlockDurationSubscription?.cancel();

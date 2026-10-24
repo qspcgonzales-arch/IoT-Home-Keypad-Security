@@ -1,4 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
@@ -11,9 +13,32 @@ import 'services/firebase_realtime_database_service.dart';
 import 'services/mock_door_service.dart';
 import 'theme/app_theme.dart';
 
+const _firebaseEmulatorHost = String.fromEnvironment('FIREBASE_EMULATOR_HOST');
+const _firebaseEmulatorProjectId = String.fromEnvironment(
+  'FIREBASE_EMULATOR_PROJECT_ID',
+  defaultValue: 'demo-smart-home',
+);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final firebaseOptions = _firebaseEmulatorHost.isEmpty
+      ? DefaultFirebaseOptions.currentPlatform
+      : FirebaseOptions(
+          apiKey: 'fake-api-key',
+          appId: '1:1234567890:android:emulator',
+          messagingSenderId: '1234567890',
+          projectId: _firebaseEmulatorProjectId,
+          databaseURL:
+              'https://$_firebaseEmulatorProjectId-default-rtdb.firebaseio.com',
+        );
+  await Firebase.initializeApp(options: firebaseOptions);
+  if (_firebaseEmulatorHost.isNotEmpty) {
+    FirebaseAuth.instance.useAuthEmulator(_firebaseEmulatorHost, 9099);
+    FirebaseDatabase.instance.useDatabaseEmulator(
+      _firebaseEmulatorHost,
+      9000,
+    );
+  }
   runApp(SmartHomeSecurityApp(authService: FirebaseAuthService()));
 }
 

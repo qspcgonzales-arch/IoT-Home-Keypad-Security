@@ -73,9 +73,10 @@ Software validation done: `tools/device_simulator/test/firmware_constraints.test
 
 The Uno still enforces `ttlMs` 1 to 60000, unlock duration 4 to 30 s, duplicate suppression (hash of the last 16 IDs), malformed-line rejection, three-attempt keypad lockout for 30 s and PIN hashing with a salt (the PIN is never stored or logged). The placeholder hash is not valid hex, so **no PIN will match until a real salted hash is provisioned at build time**. New: command IDs are restricted to `[A-Za-z0-9_-]` up to 32 chars.
 
-## 5. ESP32 Firebase client implementation plan **[Proposed, not implemented]**
+## 5. Historical ESP32 Firebase client plan (superseded by Milestone 6)
 
-Nothing below is implemented: it cannot be verified without the board, the Wi-Fi network and a live restricted account. Firmware keeps `StubCloudClient`.
+The design table below records the pre-M6 proposal only; it is not current implementation
+status. See section 5a and `INTEGRATION_TEST_RESULTS.md` for the current source and test state.
 
 | Requirement | Plan |
 | --- | --- |
@@ -91,6 +92,30 @@ Nothing below is implemented: it cannot be verified without the board, the Wi-Fi
 | Audit | Map Uno `EVENT` messages to `auditLogs` entries using the existing allowed types; one create per event, never overwrite |
 | Never expose credentials | No logging of tokens, the password or the API key; redact request URLs in logs; keep them in the untracked `secrets.h`; do not print on serial in release builds |
 | Fail safe | Cloud loss never unlocks; the Uno keeps its own keypad, lockout and relock timer |
+
+## 5a. ESP32 Firebase REST client **[Implemented; emulator-tested, not physically tested]**
+
+`hardware/esp32/smart_home_gateway/src/firebase_rest_client.cpp` uses Firebase Auth REST and
+Realtime Database REST. Emulator endpoints are plain HTTP only when `FIREBASE_USE_EMULATOR=1`;
+production endpoints must be HTTPS and use the ESP32 built-in CA certificate bundle. SNTP time is
+required before authentication and command processing. No live Firebase connection or production
+identity was used during implementation.
+
+| Requirement | Implementation and remaining limit |
+| --- | --- |
+| Dedicated revocable identity | Email/password sign-in; UID must differ from the administrator and simulator; registry must match this device ID. Identity creation/revocation is manual and not performed. |
+| Token lifecycle | ID and refresh tokens remain in RAM; refresh is scheduled before expiry, with capped exponential sign-in retry. |
+| TLS | `WiFiClientSecure` uses `useBuiltinCACertBundle()`; insecure TLS fallback is not used. Production TLS has not been exercised. |
+| Bounded pending commands | REST query filters `status=pending` and caps results at 10. Each command is checked for shape, requester UID, ID, timestamps, expiry interval and current unlock duration. |
+| Expiry and duplicate prevention | Commands are claimed before UART send; active command ID and phase persist in NVS; an accepted command is never replayed after restart. Uno also rejects recently seen IDs. |
+| Acknowledgement/state | Firebase moves to `accepted` before UART transmission. `completed` is written only after a matching remote-unlocked state and Uno `executed` ACK. A timeout/failure is not replayed. Servo ACK does not prove latch movement. |
+| Heartbeat/state/audit | Gateway and fresh Arduino-PONG heartbeat are published; Uno logical state uses `devices/frontDoor/isLocked`. Audit records use the existing schema and an eight-entry NVS outbox; proposed rules allow retries only when all stored fields are identical. |
+| Retry/backpressure | Token, state and audit retry paths are bounded. A full audit outbox disables new remote commands; local event overflow remains a physical stress-test item. |
+| Credential handling | No Admin SDK, service-account private key or administrator password is embedded. `secrets.h` is gitignored, but device flash is not protected against extraction; use a unique revocable device password. |
+| Safe behavior | Fresh `PING`/`PONG` is required before hardware readiness. Cloud loss does not fall back to simulation or send cached commands. |
+
+The ESP32 build and emulator REST contract test pass. Hardware timing, flash endurance, power-loss
+recovery, production TLS, and servo/latch behavior remain unproven. See `INTEGRATION_TEST_RESULTS.md`.
 
 ## 6. Mechanical fail-secure demonstration design **[Proposed, Unverified]**
 

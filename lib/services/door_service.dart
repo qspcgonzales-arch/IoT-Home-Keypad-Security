@@ -12,6 +12,8 @@ abstract class DoorService extends ChangeNotifier {
   bool get isDatabaseConnected;
   bool get isSimulated;
   bool get isHardware => false;
+  bool get isArduinoReady => false;
+  bool get isDeviceReady => isOnline && (!isHardware || isArduinoReady);
   bool get hasDoorStatus;
   bool get hasGatewayStatus;
   String? get feedback;

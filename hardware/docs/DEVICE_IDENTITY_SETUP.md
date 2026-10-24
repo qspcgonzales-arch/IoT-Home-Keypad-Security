@@ -40,7 +40,7 @@ The proposed rules let a device read only its own entry and nobody write it from
 | `commands` | bounded read: `orderByChild('status').equalTo('pending').limitToFirst(≤10)` |
 | `commands/<id>` | transitions `pending→accepted/failed/expired`, `accepted→completed/failed/expired`; `deviceId` must equal its registry `deviceId`; accepting requires an unexpired command |
 | `devices/frontDoor/isLocked`, `devices/gateway/*` | write; `mode` may be `hardware` |
-| `auditLogs` | create-only, validated shape |
+| `auditLogs` | create validated records; retrying the same event is allowed only when every stored field is identical |
 | everything else | denied |
 
 ## 4. Configure credentials in firmware

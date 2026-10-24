@@ -59,8 +59,10 @@ class DashboardScreen extends StatelessWidget {
           ? 'OFFLINE'
           : !service.hasGatewayStatus
           ? 'UNKNOWN'
-          : service.isOnline
+          : service.isDeviceReady
           ? 'ONLINE'
+          : service.isHardware && service.isOnline && !service.isArduinoReady
+          ? 'ARDUINO OFFLINE'
           : 'OFFLINE';
       final gatewayColor =
           service.isLoading ||
@@ -192,7 +194,7 @@ class DashboardScreen extends StatelessWidget {
                           : const Icon(Icons.lock_open),
                       label: Text(
                         service.isPending
-                            ? 'COMMAND PENDING'
+                            ? UnlockCommand.labelFor(commandStatus)
                             : unlockButtonLabel,
                       ),
                     ),
@@ -257,6 +259,10 @@ class DashboardScreen extends StatelessWidget {
                         Text(
                           service.isSimulated
                               ? 'SIMULATED • command acknowledgements enabled'
+                              : service.isHardware
+                              ? service.isArduinoReady
+                                    ? 'PHYSICAL • Arduino UART verified'
+                                    : 'PHYSICAL • Arduino UART not verified'
                               : 'Device connectivity',
                           style: TextStyle(color: AppTheme.muted, fontSize: 12),
                         ),

@@ -16,9 +16,12 @@ through 30000 in whole-second increments, and an ID not seen since boot. The
 duration is selected from the administrator-only RTDB setting
 `settings/frontDoor/unlockDurationSeconds`; it is not supplied by the app's
 command request. The Uno applies this duration to keypad and remote unlocks. It
-replies `{"type":"ack","commandId":"...","status":"accepted"}`
-before operating the servo. It replies with `type:nack` for malformed, expired,
-or duplicate requests. IDs are retained in RAM for the current boot session.
+replies `{"type":"ack","commandId":"...","status":"accepted"}` before issuing
+the servo command, publishes `STATE unlocked`, then replies with
+`{"type":"ack","commandId":"...","status":"executed"}`. `executed` confirms
+that the firmware issued the servo command; it does not prove the latch moved.
+It replies with `type:nack` for malformed, expired, or duplicate requests. IDs
+are retained in RAM for the current boot session.
 
 ## Uno to ESP32
 
@@ -28,6 +31,11 @@ Replies use the `ack` or `nack` format above. State events are:
 {"type":"STATE","door":"locked|unlocked","source":"keypad|remote|timer"}
 {"type":"EVENT","event":"accessGranted|accessDenied|securityLockout|automaticRelock|irProximity"}
 ```
+
+The ESP32 sends `{"type":"PING","pingId":"..."}` once per second. A matching
+`PONG` includes the Uno's logical door state and is required for a fresh UART
+ready heartbeat. The Uno also publishes `STATE locked` when its relock timer
+fires, followed by an `automaticRelock` event.
 
 No PIN, PIN hash, Wi-Fi secret, Firebase credential, or service-account data may
 be sent over UART. The gateway maps completed Firebase commands and hardware
@@ -40,8 +48,12 @@ three-attempt, 30-second keypad lockout. Both use non-blocking `millis()` state.
 checked again by the Uno. The ESP32 deduplicates Firebase command IDs and rejects
 pending commands that expired while Wi-Fi was unavailable.
 
-This is a provisional protocol for software and firmware alignment. Validate
-electrical levels, framing, and recovery behavior on real hardware.
+The ESP32 claims a Firebase command before UART transmission, accepts no more
+than one command at a time, and does not replay a command after a restart. If
+execution acknowledgement is lost, it records failure rather than retransmit
+an unlock. The ESP32 persists an in-flight command and a bounded audit outbox
+in NVS for recovery. These are software policies; validate framing and failure
+recovery on real hardware.
 
 ## Physical link (provisional, unverified)
 
@@ -51,14 +63,15 @@ upload on D0/D1 keeps working; the ESP32 uses UART2 on GPIO16 (RX) and GPIO17
 `ARCHITECTURE.md`. The message format above is unchanged, so the virtual
 Uno/ESP32 simulators remain compatible.
 
-## Milestone 4 changes (Uno firmware, same wire format)
+## Firmware contract checks
 
-- The wire format is unchanged. `commandId` must now match `[A-Za-z0-9_-]` and be at most 32 characters; otherwise the Uno replies `nack` with `malformed-command` and no `commandId`.
+- `commandId` must match `[A-Za-z0-9_-]` and be at most 32 characters; otherwise the Uno replies `nack` with `malformed-command` and no `commandId`.
 - A valid UNLOCK line is at most 129 bytes; the Uno line buffer holds 143. A longer line, or a `SoftwareSerial` overflow, discards the whole line and returns `nack` `malformed-command`.
 - The Uno hashes the `commandId` (32-bit FNV-1a) for its last-16 duplicate check.
-- The protocol is stop-and-wait: the ESP32 must wait for `ack`/`nack` (suggested timeout 2 s) before sending another command. The Uno cannot receive while it transmits, so the ESP32 should also tolerate `STATE` and `EVENT` lines arriving between replies.
-- Proposed v1.1, not implemented: a `STATUS`/`PING` request so the ESP32 can read the real door state after a reconnect.
-- Everything above is compiled and host-checked only; UART timing on the real SoftwareSerial link is unverified (see `SECURITY_ARCHITECTURE.md` section 3).
+- The protocol is stop-and-wait: the ESP32 waits for the execution acknowledgement before it can claim another command. The Uno can emit `STATE` and `EVENT` lines between replies.
+- `PING`/`PONG` is implemented in the Uno and ESP32 firmware to verify recent UART communication and read the Uno's logical door state.
+- The execution acknowledgement follows the servo command request; it does not verify actual servo position or door/latch movement.
+- Firmware compilation and UART timing remain subject to validation; all physical electrical and actuator behavior is unverified.
 
 ## Milestone 4.5 - compatibility review (source-level only)
 
@@ -69,5 +82,4 @@ Checked by `tools/device_simulator/test/uart_contract.test.js` (static source ch
 - Nack reasons, now aligned in the Uno: `duplicate`; `expired` only when `ttlMs == 0`; `malformed-command` for bad JSON/fields, `ttlMs > 60000`, duration outside 4000-30000 ms or not a whole second.
 - Status lifecycle: simulator and ESP32 both write `accepted` then `completed`/`failed`/`expired`, all legal under the proposed rules. The virtual gateway writes `accepted` before sending UNLOCK; the planned real client waits for the Uno `ack`.
 
-Known remaining differences (virtual Uno, `hardware/virtual/arduino_simulator.js`, deliberately unchanged):
-it replies `malformed-json` for unparseable JSON, accepts `expiresAt` without `ttlMs`, treats `ttlMs <= 0` as malformed, does not validate command-id format, and keeps an unbounded dedup set (firmware: last 16 FNV hashes, lost on reboot; ESP32: last 32 ids). Physical UART, servo, keypad and sensor behaviour is **untested**.
+The virtual Uno and gateway model the same accepted → executed acknowledgement order and the `PING`/`PONG` logical-state exchange. The virtual command dedup set is bounded to 16 IDs; the physical Uno keeps the last 16 FNV hashes since boot. Physical UART, servo, keypad and sensor behavior is **untested**.

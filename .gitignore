@@ -49,6 +49,7 @@ app.*.map.json
 
 # Firmware secrets
 hardware/esp32/**/secrets.h
+**/.pio/
 tools/rules_tests/.proposed.rules.json
 tools/rules_tests/database-debug.log
 tools/rules_tests/.live.rules.json

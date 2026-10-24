@@ -119,10 +119,12 @@ void sendNack(const __FlashStringHelper *reason, const char *id) {
   link.println(F("\"}"));
 }
 
-void sendAck(const char *id) {
+void sendAck(const char *id, const char *status) {
   link.print(F("{\"type\":\"ack\",\"commandId\":\""));
   link.print(id);
-  link.println(F("\",\"status\":\"accepted\"}"));
+  link.print(F("\",\"status\":\""));
+  link.print(status);
+  link.println(F("\"}"));
 }
 
 void setDoor(bool locked, const __FlashStringHelper *source) {
@@ -159,8 +161,25 @@ void rejectPin() {
 // Parses in place: strings point into lineBuf, so the document only holds object slots.
 void handleUart(char *line) {
   StaticJsonDocument<128> input;
-  if (deserializeJson(input, line) || input["type"] != "UNLOCK" ||
-      !input["commandId"].is<const char *>() || !input["ttlMs"].is<uint32_t>()) {
+  if (deserializeJson(input, line)) {
+    sendNack(F("malformed-command"), nullptr); return;
+  }
+  const char *type = input["type"] | "";
+  if (strcmp(type, "PING") == 0) {
+    const char *pingId = input["pingId"] | "";
+    if (!validCommandId(pingId)) {
+      sendNack(F("malformed-command"), nullptr); return;
+    }
+    link.print(F("{\"type\":\"PONG\",\"pingId\":\""));
+    link.print(pingId);
+    link.print(F("\",\"door\":\""));
+    link.print(isLocked ? F("locked") : F("unlocked"));
+    link.println(F("\"}"));
+    return;
+  }
+  if (strcmp(type, "UNLOCK") != 0 ||
+      !input["commandId"].is<const char *>() ||
+      !input["ttlMs"].is<uint32_t>()) {
     sendNack(F("malformed-command"), nullptr); return;
   }
   const char *id = input["commandId"];
@@ -178,8 +197,9 @@ void handleUart(char *line) {
   unlockDurationMs = requestedDuration;
   recentCommandHashes[recentCommandCursor] = hash;
   recentCommandCursor = (recentCommandCursor + 1) % DEDUP_SLOTS;
-  sendAck(id);
+  sendAck(id, "accepted");
   setDoor(false, F("remote"));
+  sendAck(id, "executed");
 }
 
 void pollLink() {

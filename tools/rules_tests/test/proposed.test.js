@@ -169,7 +169,9 @@ test('invalid command updates: expired command cannot be accepted; terminal stat
 
 test('audit records: valid device write accepted; invalid shapes rejected', async () => {
   const d = as(ESP);
-  await assertSucceeds(set(ref(d, 'auditLogs/ok1'), audit()));
+  const event = audit();
+  await assertSucceeds(set(ref(d, 'auditLogs/ok1'), event));
+  await assertSucceeds(set(ref(d, 'auditLogs/ok1'), event));
   await assertSucceeds(set(ref(d, 'auditLogs/ok2'), audit({ timestamp: serverTimestamp(), type: 'accessDenied' })));
   const { description, ...noDescription } = audit();
   await assertFails(set(ref(d, 'auditLogs/bad1'), noDescription));
@@ -178,7 +180,7 @@ test('audit records: valid device write accepted; invalid shapes rejected', asyn
   await assertFails(set(ref(d, 'auditLogs/bad4'), audit({ description: 'x'.repeat(201) })));
   await assertFails(set(ref(d, 'auditLogs/bad5'), audit({ timestamp: Date.now() + 86400000 })));
   await assertFails(set(ref(d, 'auditLogs/bad6'), audit({ timestamp: 'now' })));
-  await assertFails(set(ref(d, 'auditLogs/ok1'), audit({ description: 'overwrite attempt' })));
+  await assertFails(set(ref(d, 'auditLogs/ok1'), { ...event, description: 'overwrite attempt' }));
   await assertFails(remove(ref(d, 'auditLogs/ok1')));
 });
 

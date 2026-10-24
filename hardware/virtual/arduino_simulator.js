@@ -101,6 +101,17 @@ class VirtualArduino {
       this.lcdMessage = 'DOOR RELocked'.toUpperCase();
       this.buzzerEvents.push('relock');
       this.onEvent({ type: 'automaticRelock', source: 'timer', timestamp: now });
+      this.writeUart(JSON.stringify({
+        type: 'STATE',
+        door: 'locked',
+        source: 'timer',
+      }));
+      this.writeUart(JSON.stringify({
+        type: 'EVENT',
+        event: 'automaticRelock',
+        source: 'timer',
+        timestamp: now,
+      }));
     }
     if (this.lockoutUntil && now >= this.lockoutUntil) {
       this.lockoutUntil = 0;
@@ -123,12 +134,27 @@ class VirtualArduino {
       this.writeUart(JSON.stringify({ type: 'nack', reason: 'malformed-json' }));
       return { accepted: false, reason: 'malformed-json' };
     }
-    const ttlValid = Number.isFinite(message?.ttlMs) && message.ttlMs > 0 && message.ttlMs <= 60_000;
-    const timestampValid = Number.isFinite(message?.expiresAt);
+    if (message?.type === 'PING') {
+      if (typeof message.pingId !== 'string' ||
+          !/^[A-Za-z0-9_-]{1,32}$/.test(message.pingId)) {
+        this.writeUart(JSON.stringify({ type: 'nack', reason: 'malformed-command' }));
+        return { accepted: false, reason: 'malformed-command' };
+      }
+      this.writeUart(JSON.stringify({
+        type: 'PONG',
+        pingId: message.pingId,
+        door: this.locked ? 'locked' : 'unlocked',
+      }));
+      return { accepted: true };
+    }
+    const ttlValid = Number.isFinite(message?.ttlMs) &&
+      Number.isInteger(message.ttlMs) && message.ttlMs >= 0 &&
+      message.ttlMs <= 60_000;
     const durationValid = message?.unlockDurationMs === undefined ||
       (Number.isInteger(message.unlockDurationMs) && message.unlockDurationMs >= MIN_UNLOCK_MS && message.unlockDurationMs <= MAX_UNLOCK_MS);
-    if (!message || message.type !== 'UNLOCK' || typeof message.commandId !== 'string' ||
-        (Object.hasOwn(message || {}, 'ttlMs') ? !ttlValid : !timestampValid) || !durationValid) {
+    const validId = typeof message?.commandId === 'string' &&
+      /^[A-Za-z0-9_-]{1,32}$/.test(message.commandId);
+    if (message?.type !== 'UNLOCK' || !validId || !ttlValid || !durationValid) {
       this.writeUart(JSON.stringify({ type: 'nack', commandId: message?.commandId, reason: 'malformed-command' }));
       return { accepted: false, reason: 'malformed-command' };
     }
@@ -136,15 +162,26 @@ class VirtualArduino {
       this.writeUart(JSON.stringify({ type: 'nack', commandId: message.commandId, reason: 'duplicate' }));
       return { accepted: false, reason: 'duplicate' };
     }
-    if ((ttlValid && message.ttlMs <= 0) || (!ttlValid && message.expiresAt <= this.now())) {
+    if (message.ttlMs <= 0) {
       this.writeUart(JSON.stringify({ type: 'nack', commandId: message.commandId, reason: 'expired' }));
       return { accepted: false, reason: 'expired' };
     }
-    this.completedCommands.add(message.commandId);
     this.writeUart(JSON.stringify({ type: 'ack', commandId: message.commandId, status: 'accepted' }));
+    this.completedCommands.add(message.commandId);
+    while (this.completedCommands.size > DEDUP_COMMANDS) {
+      this.completedCommands.delete(this.completedCommands.values().next().value);
+    }
     this.unlock('remote', message.unlockDurationMs);
+    this.writeUart(JSON.stringify({
+      type: 'STATE',
+      door: 'unlocked',
+      source: 'remote',
+    }));
+    this.writeUart(JSON.stringify({ type: 'ack', commandId: message.commandId, status: 'executed' }));
     return { accepted: true };
   }
 }
+
+const DEDUP_COMMANDS = 16;
 
 module.exports = { DEFAULT_UNLOCK_MS, LOCKOUT_MS, MAX_ATTEMPTS, MAX_UNLOCK_MS, MIN_UNLOCK_MS, UNLOCK_MS, VirtualArduino, pinDigest };

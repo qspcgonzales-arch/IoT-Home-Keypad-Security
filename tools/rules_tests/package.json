@@ -7,7 +7,8 @@
     "pretest:proposed": "node -e \"require('fs').copyFileSync('../../database.rules.proposed.json','.proposed.rules.json')\"",
     "test:proposed": "firebase emulators:exec --only database --project demo-smart-home --config firebase.test.json \"node --test test/proposed.test.js\"",
     "test:lifecycle": "firebase emulators:exec --only database --project demo-smart-home --config firebase.test.json \"node --test test/lifecycle.test.js\"",
-    "test": "npm run test:proposed && npm run test:lifecycle"
+    "test:device-client": "firebase emulators:exec --only auth,database --project demo-smart-home --config firebase.test.json \"node --test test/device_client.integration.test.js\"",
+    "test": "npm run test:proposed && npm run test:lifecycle && npm run test:device-client"
   },
   "engines": { "node": ">=20" },
   "devDependencies": {

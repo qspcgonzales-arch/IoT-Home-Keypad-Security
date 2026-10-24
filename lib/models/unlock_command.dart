@@ -43,9 +43,9 @@ class UnlockCommand {
   };
 
   static String labelFor(UnlockCommandStatus? status) => switch (status) {
-    UnlockCommandStatus.pending ||
-    UnlockCommandStatus.accepted => 'COMMAND PENDING',
-    UnlockCommandStatus.unlocked => 'UNLOCKED',
+    UnlockCommandStatus.pending => 'COMMAND QUEUED',
+    UnlockCommandStatus.accepted => 'COMMAND ACCEPTED',
+    UnlockCommandStatus.unlocked => 'COMMAND EXECUTED',
     UnlockCommandStatus.failed => 'FAILED',
     UnlockCommandStatus.expired => 'EXPIRED',
     null => 'REMOTE UNLOCK',

@@ -10,11 +10,17 @@ enum GatewayMode {
   /// Value the gateway publishes at `devices/gateway/mode`.
   final String wireValue;
 
-  /// Unknown or missing configuration fails closed to simulation.
-  static GatewayMode parse(String? value) => GatewayMode.values.firstWhere(
-    (mode) => mode.wireValue == value,
-    orElse: () => GatewayMode.simulated,
-  );
+  /// An omitted build define keeps local development in simulation mode.
+  /// Invalid explicit values fail rather than silently selecting another mode.
+  static GatewayMode parse(String? value) {
+    if (value == null || value.isEmpty) return GatewayMode.simulated;
+    return GatewayMode.values.firstWhere(
+      (mode) => mode.wireValue == value,
+      orElse: () => throw FormatException(
+        'GATEWAY_MODE must be "simulated" or "hardware".',
+      ),
+    );
+  }
 
   /// `flutter run --dart-define=GATEWAY_MODE=hardware` opts in to hardware.
   static final GatewayMode configured = GatewayMode.parse(
@@ -50,16 +56,38 @@ class GatewayPolicy {
     return age >= -window && age <= window;
   }
 
-  /// A completed/accepted command only counts as acknowledged when the device
-  /// recorded who acknowledged it and when.
+  /// Only a fresh positive UART handshake proves the Uno is reachable.
+  bool isArduinoHeartbeatFresh({
+    required bool reportedConnected,
+    required int? lastSeenMillis,
+    required int nowMillis,
+  }) => isHeartbeatFresh(
+    reportedOnline: reportedConnected,
+    lastSeenMillis: lastSeenMillis,
+    nowMillis: nowMillis,
+  );
+
+  /// Command progress is trusted only when its device acknowledgement is
+  /// present. A completed, failed, or expired command must carry a terminal
+  /// acknowledgement timestamp.
   static bool hasDeviceAcknowledgement(Map<Object?, Object?> command) {
     final status = command['status'];
     final deviceId = command['deviceId'];
     final hasDevice = deviceId is String && deviceId.isNotEmpty;
+    final acceptedAt = command['acceptedAt'];
+    final acknowledgedAt = command['acknowledgedAt'];
     return switch (status) {
-      'accepted' => hasDevice && command['acceptedAt'] is num,
-      'completed' => hasDevice && command['acknowledgedAt'] is num,
-      _ => true,
+      'pending' => true,
+      'accepted' =>
+        hasDevice && acceptedAt is num && acceptedAt.isFinite && acceptedAt > 0,
+      'completed' ||
+      'failed' ||
+      'expired' =>
+        hasDevice &&
+            acknowledgedAt is num &&
+            acknowledgedAt.isFinite &&
+            acknowledgedAt > 0,
+      _ => false,
     };
   }
 }

@@ -43,12 +43,12 @@ Screenshots captured from this release-mode run are listed in [TESTING_AND_FEEDB
 | Session persistence | PASS | Dashboard remained signed in after app-process restart |
 | Logout | PASS | Returned to Login |
 | Incorrect password and invalid account | PASS | Generic credential errors shown; protected Dashboard did not open |
-| Unauthorized-account rejection | NOT VERIFIED | Attempt showed generic “account unknown”; Firebase authentication did not reach the app's UID check |
+| Unauthorized-account rejection | PASS (manual result reported by project owner) | Existing non-admin account showed “This account is not authorized as an administrator.” and remained on Login; no credentials recorded |
 | Offline authentication | PASS | Expected network error shown; emulator networking restored |
 | Remote command / account creation / rules deployment | NOT PERFORMED | No remote unlock command, account creation, or rules deployment occurred |
 | Flutter checks | PASS | `flutter analyze` clean; `flutter test` 8/8 |
 
-The unauthorized-account attempt is not evidence of the app's UID-specific denial. A conclusive check requires a valid, pre-existing Firebase user with a different UID; no account should be created just for this check. The successful state read shows the configured backend allowed the administrator to read the intended path, but deployed rules were not fetched or compared with the local file.
+The initial unauthorized-account attempt is not evidence of the app's UID-specific denial because the generic “account unknown” error occurred before authentication. A later manual follow-up using an existing non-admin account was reported by the project owner to show the app's administrator-denial message and remain on Login; this is recorded as a pass based on that report, with no credentials stored. No account was created for the check. The successful state read shows the configured backend allowed the administrator to read the intended path, but deployed rules were not fetched or compared with the local file.
 
 ## Live-service safety decision
 

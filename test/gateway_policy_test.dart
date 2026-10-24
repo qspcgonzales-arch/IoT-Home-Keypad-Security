@@ -3,9 +3,9 @@ import 'package:smart_home_security/services/gateway_policy.dart';
 
 void main() {
   group('GatewayMode', () {
-    test('defaults and unknown values fail closed to simulated', () {
+    test('defaults to simulated but rejects invalid explicit values', () {
       expect(GatewayMode.parse(null), GatewayMode.simulated);
-      expect(GatewayMode.parse('HARDWARE'), GatewayMode.simulated);
+      expect(() => GatewayMode.parse('HARDWARE'), throwsFormatException);
       expect(GatewayMode.parse('hardware'), GatewayMode.hardware);
       expect(GatewayMode.configured, GatewayMode.simulated);
     });
@@ -37,6 +37,34 @@ void main() {
       expect(fresh(true, now + 31000), isFalse);
     });
 
+    test('Arduino readiness requires a fresh positive UART heartbeat', () {
+      const now = 1000000;
+      expect(
+        hw.isArduinoHeartbeatFresh(
+          reportedConnected: true,
+          lastSeenMillis: now - 5000,
+          nowMillis: now,
+        ),
+        isTrue,
+      );
+      expect(
+        hw.isArduinoHeartbeatFresh(
+          reportedConnected: false,
+          lastSeenMillis: now,
+          nowMillis: now,
+        ),
+        isFalse,
+      );
+      expect(
+        hw.isArduinoHeartbeatFresh(
+          reportedConnected: true,
+          lastSeenMillis: now - 31000,
+          nowMillis: now,
+        ),
+        isFalse,
+      );
+    });
+
     test('accepted/completed need device acknowledgement fields', () {
       expect(
         GatewayPolicy.hasDeviceAcknowledgement({'status': 'completed'}),
@@ -49,6 +77,21 @@ void main() {
           'acknowledgedAt': 5,
         }),
         isTrue,
+      );
+      expect(
+        GatewayPolicy.hasDeviceAcknowledgement({
+          'status': 'failed',
+          'deviceId': 'esp32-frontdoor-1',
+          'acknowledgedAt': 5,
+        }),
+        isTrue,
+      );
+      expect(
+        GatewayPolicy.hasDeviceAcknowledgement({
+          'status': 'failed',
+          'deviceId': 'esp32-frontdoor-1',
+        }),
+        isFalse,
       );
       expect(
         GatewayPolicy.hasDeviceAcknowledgement({'status': 'accepted'}),

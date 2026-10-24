@@ -25,6 +25,16 @@
           ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
           ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
           ".validate": "newData.val() === 'simulated' || (newData.val() === 'hardware' && !(auth.uid === 'device-simulator'))"
+        },
+        "arduinoConnected": {
+          ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".validate": "newData.isBoolean()"
+        },
+        "arduinoLastSeen": {
+          ".read": "auth != null && (auth.uid === 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3' || auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true)",
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
         }
       }
     },
@@ -102,7 +112,7 @@
         "timestamp"
       ],
       "$eventId": {
-        ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true) && !data.exists() && newData.exists()",
+        ".write": "auth != null && (auth.uid === 'device-simulator' || root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true) && newData.exists() && (!data.exists() || (newData.child('type').val() === data.child('type').val() && newData.child('description').val() === data.child('description').val() && newData.child('timestamp').val() === data.child('timestamp').val() && newData.child('commandId').val() === data.child('commandId').val() && newData.child('actorUid').val() === data.child('actorUid').val()))",
         ".validate": "newData.hasChildren(['type', 'description', 'timestamp', 'commandId', 'actorUid']) && (newData.child('type').val() === 'remoteUnlock' || newData.child('type').val() === 'automaticRelock' || newData.child('type').val() === 'commandFailed' || newData.child('type').val() === 'commandExpired' || newData.child('type').val() === 'accessGranted' || newData.child('type').val() === 'accessDenied' || newData.child('type').val() === 'securityLockout')",
         "type": {
           ".validate": "newData.isString()"

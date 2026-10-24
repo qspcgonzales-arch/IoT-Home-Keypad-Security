@@ -11,9 +11,13 @@ class VirtualEsp32Gateway extends DeviceSimulator {
     this.wifiConnected = true;
     this.queuedCommands = new Map();
     this.hardwareEvents = [];
+    this.pendingUartWrites = [];
+    this.lastRemoteCommand = null;
     this.unlockDurationSeconds = 4;
     this.settingsListener = null;
-    this.arduino.writeUart = (line) => { void this._onUartLine(line); };
+    this.arduino.writeUart = (line) => {
+      this.pendingUartWrites.push(this._onUartLine(line));
+    };
     this.arduino.onEvent = (event) => { void this._onArduinoEvent(event); };
   }
 
@@ -133,6 +137,7 @@ class VirtualEsp32Gateway extends DeviceSimulator {
       ttlMs: Math.max(0, Math.min(60_000, command.expiresAt - this.now())),
       unlockDurationMs: this.unlockDurationSeconds * 1_000,
     }));
+    await Promise.all(this.pendingUartWrites.splice(0));
     return { status: 'accepted' };
   }
 
@@ -150,6 +155,26 @@ class VirtualEsp32Gateway extends DeviceSimulator {
     }
     if (message.type === 'ack' && message.status === 'accepted') {
       this._log(`UART acknowledged command ${message.commandId}.`);
+      return;
+    }
+    if (message.type === 'ack' && message.status === 'executed') {
+      const current = this.currentCommand;
+      if (!current || message.commandId !== current.id) {
+        this._log(`Ignored execution acknowledgement for inactive command ${message.commandId}.`);
+        return;
+      }
+      await this.database.ref(`commands/${current.id}`).update({
+        status: 'completed', acknowledgedAt: this.serverTimestamp,
+        message: 'Virtual Uno acknowledged command execution.',
+      });
+      this.lastRemoteCommand = current;
+      this._finishCurrent();
+      return;
+    }
+    if (message.type === 'STATE' &&
+        (message.door === 'locked' || message.door === 'unlocked')) {
+      await this.database.ref('devices/frontDoor/isLocked')
+        .set(message.door === 'locked');
     }
   }
 
@@ -167,17 +192,14 @@ class VirtualEsp32Gateway extends DeviceSimulator {
       });
     } else if (event.type === 'automaticRelock') {
       await this.database.ref('devices/frontDoor/isLocked').set(true);
-      const command = this.currentCommand;
+      const command = this.currentCommand || this.lastRemoteCommand;
       if (command) {
         await this._writeAuditEvent({
           type: 'automaticRelock', description: `Virtual Uno automatically relocked after ${this.unlockDurationSeconds} seconds.`,
           commandId: command.id, actorUid: command.record.requestedBy,
         });
-        await this.database.ref(`commands/${command.id}`).update({
-          status: 'completed', acknowledgedAt: this.serverTimestamp,
-          message: 'Virtual Uno completed unlock and automatic relock.',
-        });
-        this._finishCurrent();
+        if (this.lastRemoteCommand === command) this.lastRemoteCommand = null;
+        if (this.currentCommand === command) this._finishCurrent();
       } else if (event.source === 'timer') {
         await this._writeAuditEvent({
           type: 'automaticRelock', description: `Local keypad access automatically relocked after ${this.unlockDurationSeconds} seconds.`,

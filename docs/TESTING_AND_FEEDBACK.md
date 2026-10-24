@@ -8,7 +8,8 @@
 | Email/Password provider | Confirm in Firebase Console | Enabled, confirmed by the project owner |
 | Administrator login and UID | Enter test credentials manually in the emulator; compare Console UID with app/local-rules allowlist | Dashboard opened; Console UID matched the approved UID |
 | Incorrect password and invalid account | Submit each in the app | Generic credential error shown; Dashboard did not open |
-| Unauthorized-account attempt | Attempt sign-in with the purported non-admin account | Generic “account unknown” error appeared. Firebase authentication did not succeed, so the app's UID-specific unauthorized-account denial was not verified |
+| Initial unauthorized-account attempt | Attempt sign-in with the purported non-admin account | Generic “account unknown” error appeared. Firebase authentication did not succeed, so the app's UID-specific denial was not verified by this attempt |
+| Existing non-admin authorization follow-up | Sign in with an existing non-admin account on the `Medium_Phone` emulator | Project owner reported that the app showed “This account is not authorized as an administrator.” and stayed on Login. Based on this reported result, authentication succeeded and the app's UID check denied Dashboard access |
 | Device-state read | Open Dashboard after administrator login; do not use command controls | `devices/frontDoor/isLocked` returned `LOCKED`; no database/rules error was shown |
 | Session persistence | Force-stop and relaunch without signing out | Dashboard remained signed in |
 | Logout | Use app logout control | Returned to Login |
@@ -17,7 +18,7 @@
 | Static analysis and Flutter tests | `flutter analyze`, `flutter test` | No analysis issues; 8 tests passed |
 | Flutter launch | Use existing APK with `flutter run --no-pub --use-application-binary=build/app/outputs/flutter-apk/app-release.apk -d emulator-5554` | Existing APK installed/launched without a rebuild. A normal debug build attempt failed on a Gradle CMake metadata file lock |
 
-The unauthorized-account attempt did **not** establish that a valid Firebase user with a different UID is denied by the app: the generic account-unknown authentication error occurred before the UID check. No successful authentication with a non-admin UID was observed. Do not create an account for this test; use only an existing, valid non-admin test account if one is provisioned later.
+The initial unauthorized-account attempt did **not** establish that a valid Firebase user with a different UID is denied by the app: the generic account-unknown authentication error occurred before the UID check. In a later manual follow-up on 2026-10-24, the project owner reported that an existing non-admin account reached the app's administrator-denial message and remained on Login. This closes the app-level UID-check gap based on the reported result; credentials were not recorded. Do not create an account for this test.
 
 The local rules allow the approved administrator UID to read `devices/frontDoor/isLocked`. The successful live read verifies that the configured backend permitted this read at test time; deployed rules were not fetched or compared with `database.rules.json`. No remote command was created or submitted.
 

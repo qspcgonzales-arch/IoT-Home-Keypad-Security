@@ -62,7 +62,7 @@ test('configured duration applies to local PIN entry and validates bounds', () =
 
 test('UART command duration is validated and controls the relock deadline', () => {
   const clock = { value: 50_000 }, uno = makeUno(clock);
-  const valid = { type: 'UNLOCK', commandId: 'duration-test', expiresAt: 60_000, unlockDurationMs: 12_000 };
+  const valid = { type: 'UNLOCK', commandId: 'duration-test', expiresAt: 60_000, ttlMs: 10_000, unlockDurationMs: 12_000 };
   assert.equal(uno.handleUartLine(JSON.stringify(valid)).accepted, true);
   assert.equal(uno.relockAt, clock.value + 12_000);
   const invalid = { ...valid, commandId: 'bad-duration', unlockDurationMs: 31_000 };
@@ -94,11 +94,41 @@ test('lockout expires without blocking local entry', () => {
 
 test('UART accepts a valid unexpired command and rejects duplicates and expired IDs', () => {
   const clock = { value: 50_000 }, uart = [], uno = makeUno(clock, [], uart);
-  const valid = JSON.stringify({ type: 'UNLOCK', commandId: 'a', expiresAt: 60_000 });
+  const valid = JSON.stringify({
+    type: 'UNLOCK',
+    commandId: 'a',
+    expiresAt: 60_000,
+    ttlMs: 10_000,
+    unlockDurationMs: 4_000,
+  });
   assert.equal(uno.handleUartLine(valid).accepted, true);
   assert.equal(uno.handleUartLine(valid).reason, 'duplicate');
-  assert.equal(uno.handleUartLine(JSON.stringify({ type: 'UNLOCK', commandId: 'b', expiresAt: 49_999 })).reason, 'expired');
+  assert.equal(uno.handleUartLine(JSON.stringify({
+    type: 'UNLOCK',
+    commandId: 'b',
+    expiresAt: 49_999,
+    ttlMs: 0,
+  })).reason, 'expired');
   assert.equal(uart[0].status, 'accepted');
+  assert.deepEqual(uart[1], {
+    type: 'STATE',
+    door: 'unlocked',
+    source: 'remote',
+  });
+  assert.equal(uart[2].status, 'executed');
+});
+
+test('UART ping verifies Arduino presence and current logical door state', () => {
+  const clock = { value: 50_000 }, uart = [], uno = makeUno(clock, [], uart);
+  assert.equal(uno.handleUartLine(JSON.stringify({
+    type: 'PING',
+    pingId: 'boot-1',
+  })).accepted, true);
+  assert.deepEqual(uart[0], {
+    type: 'PONG',
+    pingId: 'boot-1',
+    door: 'locked',
+  });
 });
 
 test('IR proximity transitions are emitted once per state change', () => {
@@ -125,8 +155,9 @@ test('remote Flutter command follows accepted, UART acknowledgement, four-second
   db.put('commands/cmd-remote', command(clock.value));
   const result = await gateway.handleCommand('cmd-remote', command(clock.value));
   assert.equal(result.status, 'accepted');
-  assert.equal(db.get('commands/cmd-remote/status'), 'accepted');
+  assert.equal(db.get('commands/cmd-remote/status'), 'completed');
   assert.equal(uno.locked, false);
+  assert.equal(db.get('devices/frontDoor/isLocked'), false);
   clock.value += UNLOCK_MS; uno.tick();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(db.get('commands/cmd-remote/status'), 'completed');

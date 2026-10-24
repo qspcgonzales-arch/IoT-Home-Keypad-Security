@@ -10,6 +10,7 @@ const root = path.join(__dirname, '..', '..', '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const uno = read('hardware/arduino/smart_home_lock/smart_home_lock.ino');
 const esp = read('hardware/esp32/smart_home_gateway/src/main.cpp');
+const espClient = read('hardware/esp32/smart_home_gateway/src/firebase_rest_client.cpp');
 const proto = read('hardware/docs/uart_protocol.md');
 const sim = read('tools/device_simulator/device_simulator.js');
 
@@ -47,6 +48,15 @@ test('Uno range limits match ESP32 limits (ttl <= 60000 ms, duration 4-30 s whol
   assert.match(uno, /ttl > 60000/);
   assert.match(uno, /requestedDuration % 1000 != 0/);
   assert.match(esp, /60000/);
+});
+
+test('UART presence and execution acknowledgements match the firmware contract', () => {
+  assert.match(uno, /PONG/);
+  assert.match(esp, /PING/);
+  assert.match(uno, /sendAck\(id, "accepted"\)[\s\S]*setDoor\(false, F\("remote"\)\)[\s\S]*sendAck\(id, "executed"\)/);
+  assert.match(espClient, /status.*executed/);
+  assert.match(proto, /PONG/);
+  assert.match(proto, /"status":"executed"/);
 });
 
 test('simulator command contract: pending -> accepted -> completed, TTL <= 60 s', () => {
