@@ -42,7 +42,7 @@ async function setup(rulesFile) {
     database: adminSdk.database(app),
     adminUid: ADMIN,
     heartbeatIntervalMs: 60000,
-    unlockDurationMs: 400,
+    unlockDurationMs: 4000,
     log: () => {},
   });
   return { env, app, sim };
