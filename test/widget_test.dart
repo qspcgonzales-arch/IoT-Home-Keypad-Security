@@ -32,6 +32,21 @@ void main() {
     expect(find.text('Access granted'), findsOneWidget);
   });
 
+  testWidgets('hardware-test demo starts locally without Firebase', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const SmartHomeSecurityApp(
+        authService: DemoAuthService(),
+        hardwareTestBuild: true,
+        startInDemoMode: true,
+      ),
+    );
+
+    expect(find.text('Front door'), findsOneWidget);
+    expect(find.text('Welcome home'), findsNothing);
+  });
+
   testWidgets('login validates email and password', (tester) async {
     await tester.pumpWidget(
       const SmartHomeSecurityApp(authService: DemoAuthService()),
