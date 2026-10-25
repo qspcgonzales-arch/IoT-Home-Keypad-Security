@@ -1,5 +1,10 @@
 # Milestone 6.5 — ESP32/Uno UART Acceptance
 
+> Historical Milestone 6.5 procedure for the separate Uno/UART architecture.
+> Milestone 6.6 introduces a distinct ESP32-only path; use
+> [ESP32_ONLY_ACCEPTANCE.md](./ESP32_ONLY_ACCEPTANCE.md) for that design. Do
+> not combine the pin maps or firmware targets.
+
 ## Current status and blockers
 
 - Source-level assignments agree: Uno `SoftwareSerial` RX=A2/TX=A3 and ESP32

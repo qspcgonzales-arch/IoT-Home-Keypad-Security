@@ -1,5 +1,11 @@
 # Device Setup and Firmware Commands
 
+> **Milestone 6.6:** For the ESP32-only offline diagnostic image, use
+> [ESP32_ONLY_ACCEPTANCE.md](./ESP32_ONLY_ACCEPTANCE.md). The ESP32-only build
+> is separate from the legacy UART/Firebase gateway documented below. Do not
+> use the old gateway upload target for the new pin map, and do not connect the
+> new diagnostic build to Firebase.
+
 ## Safe defaults
 
 - The ESP32 does not connect unless a local `secrets.h` contains non-placeholder

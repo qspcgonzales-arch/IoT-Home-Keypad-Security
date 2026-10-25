@@ -1,5 +1,12 @@
 # Hardware test plan
 
+> **Architecture update:** The sequences below describe the earlier Uno + ESP32
+> UART path and are historical, not acceptance steps for the new ESP32-only
+> design. For Milestone 6.6, use [ESP32_ONLY_ACCEPTANCE.md](./ESP32_ONLY_ACCEPTANCE.md)
+> and its GPIO23 wiring recommendation. Do not mix the old UART pinout with
+> the ESP32-only firmware. No physical test should be marked passed without
+> direct evidence.
+
 No physical Arduino Uno R3, ESP32, servo, level shifter or lock mechanism was available during
 Milestone 6. Every physical item below is **pending**; see `INTEGRATION_TEST_RESULTS.md` for the
 separate source/build/emulator results. Record physical results only after observing the real hardware.

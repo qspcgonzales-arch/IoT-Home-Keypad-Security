@@ -1,0 +1,4 @@
+#pragma once
+
+#define ESP32_PIN_HASH_HEX "replace-with-64-character-sha256-hex"
+#define ESP32_PIN_SALT "replace-with-a-random-hex-salt"

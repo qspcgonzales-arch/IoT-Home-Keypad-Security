@@ -1,122 +1,108 @@
-# Uno R3 + ESP32 architecture (provisional, unverified)
+# ESP32-only architecture (Milestone 6.6)
 
-**Nothing in this document has been tested on hardware.** Pin, voltage, current and timing statements
-are design proposals. Items marked [Source] come from `REFERENCE_RESEARCH.md`; the rest are
-[Assumption] based on general datasheet knowledge and must be checked against the exact boards.
+**This is the new target architecture, not a record of completed physical
+integration.** Wiring, voltage levels, board identity, component behavior, and
+servo mechanics remain unverified. Do not connect to an occupied door, flash
+hardware, connect to Firebase, or remotely actuate a servo as part of this
+offline preparation.
 
+```text
+Local keypad PIN ───────┐
+                       ├── ESP32-WROOM-32 ── local LCD status
+TCRT5000 digital input ┤                 ├── active buzzer (driver if needed)
+                       │                 └── SG90 signal (separate servo supply)
+                       └── standalone local diagnostics
+
+Flutter / Firebase: not connected in the Milestone 6.6 standalone build
+Arduino Uno / UART: not part of the new hardware path
 ```
-Flutter app â”€â”€(Firebase Auth + RTDB, unchanged contract)â”€â”€ Firebase â”€â”€â”€â”€ ESP32 gateway
-                                                                          â”‚ UART, 3.3 V side
-                                                              level shifter (5 V â†” 3.3 V)
-                                                                          â”‚ UART, 5 V side
-                                                                     Uno R3 lock controller
-                                          keypad Â· I2C LCD Â· IR sensor Â· buzzer Â· servo (own 5 V supply)
-```
 
-- **Uno** owns everything that must work offline: PIN check (salted hash), 3-attempt/30 s lockout,
-  the relock timer, the servo, LCD and buzzer. It never touches Wi-Fi or Firebase.
-- **ESP32** owns Wi-Fi, time, Firebase identity and the command/audit mapping. It cannot actuate the servo;
-  it can only send a validated `UNLOCK` line to the Uno.
-- The Firebase contract and `database.rules.json` are unchanged by this design.
+The ESP32 directly owns the 4x4 keypad, 16x2 I2C LCD, digital TCRT5000 input,
+active buzzer, and SG90 signal. The standalone firmware has no Wi-Fi, Firebase,
+UART, cloud commands, or actuator acknowledgement path. Local keypad
+verification uses a salted SHA-256 digest with a constant-time comparison;
+the PIN value is neither committed nor logged. Three failed attempts trigger
+a 30-second lockout, a valid local PIN starts a four-second logical unlock,
+and the device automatically relocks.
 
-## Provisional Uno R3 pin map
+## Firmware paths
 
-| Pin | Function | Notes |
+| Path | Purpose | Status |
 | --- | --- | --- |
-| D0 / D1 | USB serial (upload and debug) | **Left free.** Using them for the ESP32 link blocks sketch upload and shares the USB serial port |
-| D2â€“D5 | Keypad rows | Same group as source 5 (D2â€“D9) |
-| D6â€“D9 | Keypad columns | [Source 5] |
-| D10 | Servo signal | [Source 5] |
-| D11 | IR proximity digital output | |
-| D12 | Buzzer through a transistor driver if the buzzer draws more than ~20 mA | [Assumption] |
-| D13 | Free | The on-board LED shares it |
-| A0, A1 | Free | |
-| A2 | `SoftwareSerial` RX (from ESP32 TX, via level shifter) | Analog pins double as digital and support pin-change interrupts |
-| A3 | `SoftwareSerial` TX (to ESP32 RX, via level shifter) | |
-| A4 / A5 | I2C SDA / SCL to the LCD | [Source 5] |
+| `hardware/esp32/esp32_only` | ESP32-only local diagnostic build for this migration | New; offline; physical test pending |
+| `hardware/esp32/smart_home_gateway` | Existing ESP32/Firebase gateway using Arduino UART PING/PONG | Historical/legacy architecture; do not mix with ESP32-only pin map |
+| `hardware/arduino/smart_home_lock` | Existing Uno keypad/actuator controller and UART endpoint | Historical/legacy architecture; retained unchanged |
 
-**Conflicts found and resolved in the proposal**
+The UART firmware remains available in the repository and its commit history;
+the new project does not repurpose its build environment or silently change
+its protocol. The current standalone build compiles servo actuation out. A
+separate supervised servo-test environment is disarmed at boot, requires all
+four local peripheral checks to be confirmed, and is not a cloud integration
+target.
 
-1. The existing firmware used the hardware `Serial` (D0/D1) at 115200 for the ESP32 link. That conflicts with USB upload and debugging, and the Uno has no second hardware UART. Proposal: `SoftwareSerial` on A2/A3 at **9600 baud**.
-2. `SoftwareSerial` disables interrupts while sending, and the `Servo` library also relies on timer interrupts, so servo jitter or dropped bytes are possible. Messages are short and 9600 baud is conservative, but this is **unverified**; test with the servo moving. See the risk assessment in `SECURITY_ARCHITECTURE.md` section 3.
-3. The firmware no longer calls `tone()`. The buzzer is now driven on/off with `digitalWrite` and `millis()` (an **active** buzzer is assumed; a passive buzzer would only click). This removes the Timer2 ISR from the picture. [Proposed modification, compiled, unverified on hardware]
-4. The `Servo` library disables PWM (`analogWrite`) on D9 and D10. No PWM is used on those pins.
+## ESP32-only pin map
 
-## Provisional ESP32 DevKit pin map
-
-| GPIO | Function | Notes |
+| GPIO | Function | Review |
 | --- | --- | --- |
-| 16 (RX2) | UART from Uno | Through the level shifter |
-| 17 (TX2) | UART to Uno | Through the level shifter |
-| 2 | Optional status LED | On-board LED on many DevKits; a strapping pin, do not drive it hard during boot |
-| 21 / 22 | I2C (reserved, unused) | Do **not** connect the 5 V LCD I2C bus here |
-| all others | Unused | Avoid GPIO 0, 2, 5, 12, 15 (strapping), 6â€“11 (flash) and 34â€“39 (input only) for outputs |
+| 32, 33, 25, 26 | Keypad rows 1–4 | Requested assignment; confirm matrix order against wiring |
+| 27, 14, 23, 13 | Keypad columns 1–4 | GPIO23 replaces requested GPIO12; do not assume rewiring occurred |
+| 19 | Active buzzer signal | Verify signal polarity and current; driver may be needed |
+| 18 | SG90 signal | Actuation is compiled out of standalone build |
+| 34 | TCRT5000 digital output | Input-only, no internal pull-up/down; external output must have defined 3.3 V logic |
+| 21 | LCD SDA | Verify bus pull-up voltage |
+| 22 | LCD SCL | Verify bus pull-up voltage |
 
-The reference projects use GPIO 13 for a servo (sources 3, 4, 8) and several strapping pins for keypads
-(sources 1, 3). Our design avoids both: the ESP32 has no actuator or keypad.
+GPIO12 is an ESP32 strapping pin; a keypad circuit can disturb boot selection.
+The firmware and recommended wiring use GPIO23 instead. Confirm the physical
+column is actually moved before powering the assembled board. GPIO34 is
+input-only and must not be configured with an internal pull resistor.
 
-## Voltage-level conversion
+## Electrical and power constraints
 
-| Signal | Levels | Action |
-| --- | --- | --- |
-| Uno TX (A3) to ESP32 RX (GPIO16) | 5 V to 3.3 V input (not 5 V tolerant) | **Required:** down-shift this push-pull UART signal with a proper divider or UART-compatible buffer. Never connect directly |
-| ESP32 TX (GPIO17) to Uno RX (A2) | 3.3 V to Uno logic | Use a direction-fixed push-pull buffer/translator meeting the actual Uno input-high requirement; do not rely on a marginal direct connection |
-| I2C LCD | 5 V on the Uno bus only | Keep it off the ESP32 |
-| Common ground | Uno, ESP32, servo supply, sensors | **Required** |
+- ESP32 GPIOs are not 5 V tolerant. Many 5 V LCD I2C backpacks pull SDA/SCL up
+  to 5 V. Measure the exact module and use a suitable I2C level shifter or
+  confirmed 3.3 V pull-ups; never apply 5 V directly to GPIO21/22.
+- Verify the exact TCRT5000 board's supply and digital output levels. GPIO34
+  must see a defined low and high that remain within ESP32 input limits.
+- Power the SG90/clone from a separate regulated supply sized to the exact
+  servo's stall-current requirement. Do not use an ESP32 GPIO, 3.3 V pin, or
+  USB rail as servo power. Share the signal reference ground, but route servo
+  current back to its own supply. Keep the horn unloaded and disconnected from
+  any mechanism during a separately approved supervised test.
+- Identify whether the buzzer is active or passive and its current. The
+  firmware assumes active-high on/off behavior. Add a transistor driver when
+  the load exceeds the ESP32 board's permitted GPIO current.
+- Verify exact module polarity, voltage, and board pin labels against
+  datasheets and measurements. Wire colors are not evidence.
 
-## Power
+## Safe startup and actuation policy
 
-| Load | Proposal | Reason |
-| --- | --- | --- |
-| Servo (SG90) | Separate regulated supply sized for the exact servo's measured/datasheet stall current; join signal ground to Uno GND; + **not** connected to Uno 5V | The earlier 1 A value is provisional only; clone servo current and supply margin are unverified |
-| Add a bulk capacitor (for example 470â€“1000 ÂµF) across the servo supply | [Assumption] | Reduces supply dips when the servo starts |
-| ESP32 | Own USB or regulated 5 V supply | Wi-Fi peaks are current-hungry [Assumption] |
-| Uno, LCD, IR, keypad | USB or a 7â€“12 V barrel jack | Low current |
-| Real door lock (solenoid or strike) | **Out of scope.** Needs its own supply, a MOSFET/relay driver and a flyback diode; the servo is a bench stand-in only | [Source 1] mentions a 12 V solenoid with a driver; [Source 5] says a servo is a demo |
+At boot, the buzzer is set low, servo signal is set low, the sensor is input
+only, and no servo library is attached or commanded. The default
+`esp32dev_standalone` image has no servo dependency at runtime and implements
+only logical lock-state timing. The separately compiled
+`esp32dev_supervised_servo_test` can attach the servo only after all local
+keypad, LCD, sensor, and buzzer tests have been confirmed and an operator
+enters `ARM SERVO` on the local serial console. A local valid PIN is then
+required to request movement. Never issue servo commands remotely.
 
-Fail-safe behaviour on power loss, and whether the lock should be fail-secure or fail-open, are
-## Lock mechanism and power-loss behaviour (design intent, unverified)
+The logical lock state is not proof of bolt position. The TCRT5000's exact
+physical meaning and placement must be established before interpreting it as
+door/lock state. A hobby servo is not a fail-secure lock and must not be
+connected to an occupied entrance.
 
-The demonstration lock is intended to be **fail-secure with manual release**: with all electrical power
-removed, the door stays mechanically locked, and a person on the inside (or with a key) can still open it
-by hand. A servo's firmware position does not provide this property; see `SECURITY_ARCHITECTURE.md`
-section 6 for the reasoning, the power-loss behaviour and the tests that cannot be run until the physical
-mechanism exists. The SG90 is a bench stand-in for the actuator only.
+## Cloud migration boundary
 
-## Firebase identity for the ESP32 (proposed, not deployed)
+No staging project, least-privilege device account, or administrator account
+was supplied for this milestone. The local image intentionally has no cloud
+credentials or network code. Before a separate cloud milestone, preserve the
+existing gateway's Firebase authentication, device identity and registry,
+command expiry/validation, acknowledgement sequence, heartbeat, and audit
+schema while replacing the UART endpoint with explicit local peripheral
+events. Add outage, stale-heartbeat, expiry, and failed-ack tests; begin with
+remote actuation disabled. Do not alter production rules/accounts or Flutter
+as part of the local firmware migration.
 
-The ESP32 will use its own Firebase Auth email/password user, registered in a `deviceRegistry/$uid` node
-that only the Firebase Console or Admin SDK can write. It never holds the administrator login, the
-simulator's service account or any Admin SDK credential. Details, proposed rules and the revocation
-procedure are in `SECURITY_ARCHITECTURE.md` and `database.rules.proposed.json`. The ESP32 REST client
-is implemented and emulator-tested, but no device identity has been provisioned and the deployed
-`database.rules.json` remains unchanged. Keep firmware configured for the isolated emulator until
-production access and physical testing are explicitly approved.
-
-## Uno memory budget (compiled, measured)
-
-| Metric | Before | After |
-| --- | --- | --- |
-| Flash | 26,362 bytes (81%) | 18,574 bytes (57%) |
-| Static SRAM | 1,508 bytes (73%) | 1,056 bytes (51%) |
-| Free for stack/heap | 540 bytes | 992 bytes |
-
-Changes: heap `String` objects and 16 `String` command IDs replaced by fixed `char` buffers and 16 FNV-1a
-hashes; all text moved to flash with `F()`/`PROGMEM`; outgoing JSON is printed directly instead of through
-`StaticJsonDocument`s; the incoming document shrank from 256 to 128 bytes and parses in place; the PIN salt
-and hash live in flash and are compared in constant time; the unused `Serial.begin` was removed (it also
-dropped the 157-byte `Serial` object). Stack depth was **not measured** (`-fstack-usage` produced empty
-output with this toolchain); 992 bytes remain for stack and heap, and the SHA-256 context plus the JSON
-document are the largest stack users. Check free RAM on real hardware.
-
-Trade-offs: command-ID duplicate detection now compares 32-bit hashes (a false "duplicate" is possible
-with probability about 16/2^32 per command; a duplicate is never accepted twice). Command IDs are
-restricted to `[A-Za-z0-9_-]`, 32 characters at most; Firebase push keys comply.
-
-## Milestone 4.5 - hardware mode in the Flutter app (prepared, NOT activated)
-
-- `lib/services/gateway_policy.dart` holds `GatewayMode` and the pure `GatewayPolicy`. Mode comes only from the build flag `--dart-define=GATEWAY_MODE=hardware`; the default and any unknown value is `simulated`. The app never switches modes automatically.
-- Remote Unlock requires the reported `devices/gateway/mode` to equal the configured mode, a fresh heartbeat (missing or older than 30 s shows OFFLINE), database connectivity, and a known locked door.
-- A command is only shown as accepted/UNLOCKED when the device wrote `deviceId` plus `acceptedAt`/`acknowledgedAt`.
-- Flutter still never writes lock state or acknowledgements. Identity of the physical device is enforced by the database rules (only a registered device may publish `mode: hardware`), not by the app. Under the live rules hardware mode is inert.
-- Setup of the dedicated device identity: `DEVICE_IDENTITY_SETUP.md` (procedure only; nothing created).
+See [ESP32_ONLY_ACCEPTANCE.md](./ESP32_ONLY_ACCEPTANCE.md) for sequential
+component checks, exact local build/test commands, electrical blockers, and
+the separately supervised unloaded-servo procedure.

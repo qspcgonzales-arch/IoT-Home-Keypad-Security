@@ -111,3 +111,24 @@ erase as a partition migration shortcut.
 
 Follow `HARDWARE_TEST_PLAN.md` in order and record measured voltages, timing,
 serial traces, and observed results before changing any row from pending.
+
+## Milestone 6.6 — ESP32-only offline preparation
+
+| Check | Result | Evidence / limitation |
+| --- | --- | --- |
+| Standalone ESP32 build | **Pass; not uploaded** | `esp32dev_standalone`; PlatformIO reports 337,884 bytes flash use and 23,900 bytes RAM. Complete `firmware.bin`: 344,192 bytes. |
+| Supervised servo-test build | **Pass; not uploaded or actuated** | `esp32dev_supervised_servo_test`; 357,391 bytes flash use and 24,280 bytes RAM. Complete `firmware.bin`: 364,080 bytes. Servo starts disarmed, requires four confirmed local component checks before arming, and remains unattached until an accepted local PIN. |
+| 4 MB app-slot fit | **Conditional build-profile pass** | Both complete images fit the selected `ota_nofs_4MB.csv` app slot of 2,031,616 bytes. This does not identify or verify any physical ESP32 flash. |
+| Simulator / firmware contract suite | **Pass** | `npm test` in `tools\device_simulator`: 45 passed, including GPIO, no-cloud, servo-gate, PIN-digest, and GPIO34 input contracts. Existing simulator lifecycle tests also pass. |
+| PIN verifier helper tests | **Pass** | `py -3.13 -m unittest discover -s tools\esp32_only -p test_*.py`: 3 passed. |
+| Whitespace check | **Pass** | `git diff --check`; only existing line-ending conversion warnings. |
+| GPIO voltage/current and physical pinout checks | **Not performed** | No hardware measurements or component tests were made. Resolve the blockers in `ESP32_ONLY_ACCEPTANCE.md` before any wiring/power. |
+| Firmware upload, servo movement, Firebase, Flutter, production rules/accounts | **Not performed / unchanged** | No upload, remote command, cloud connection, Flutter change, production rules deployment, or production account modification. |
+
+Build toolchain: PlatformIO Espressif 32 `8.0.0`, Arduino-ESP32 `3.3.12`,
+Keypad `3.1.1`, LiquidCrystal_I2C `1.1.4`, and ESP32Servo `3.2.1`. The exact
+build commands, pin table, GPIO12-to-23 recommendation, electrical blockers,
+local PIN provisioning, and physical acceptance sequence are in
+`ESP32_ONLY_ACCEPTANCE.md`. The standalone image was built without a provisioned
+PIN header; local PIN verification remains fail-closed until a dedicated
+ignored `src\pin_config.h` is created.
