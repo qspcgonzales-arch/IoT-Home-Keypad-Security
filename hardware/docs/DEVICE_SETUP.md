@@ -69,10 +69,12 @@ Install PlatformIO Core if it is not already available:
 py -3.13 -m pip install --user platformio
 ```
 
-Build both targets without connecting to Firebase:
+Build the UART-only ESP32 target and the Uno without connecting to Firebase.
+The UART-only ESP32 environment ignores any local `secrets.h` and does not
+configure Wi-Fi:
 
 ```powershell
-py -3.13 -m platformio run -d hardware\esp32\smart_home_gateway -e esp32dev
+py -3.13 -m platformio run -d hardware\esp32\smart_home_gateway -e esp32dev_uart_only_4mb
 py -3.13 -m platformio run -d hardware\arduino\smart_home_lock -e uno
 ```
 
@@ -83,12 +85,16 @@ Resolved versions from the clean builds:
 | Target | Platform / framework | Libraries and tools |
 | --- | --- | --- |
 | ESP32 `esp32dev` | `espressif32@8.0.0`; Arduino-ESP32 `3.3.12`; board profile assumes 4 MB flash | ArduinoJson `7.4.3`; framework WiFi, HTTPClient, NetworkClientSecure, Preferences `3.3.12`; Xtensa toolchain `14.2.0+20260121`; esptool `5.4.0` |
+| ESP32 `esp32dev_uart_only_4mb` | Same toolchain; `ota_nofs_4MB.csv`; UART-only, skips `secrets.h` | Current `firmware.bin`: 1,323,120 bytes; candidate OTA app slot: 2,031,616 bytes |
 | Uno `uno` | `atmelavr@5.3.0`; Arduino AVR framework `5.4.0` | Keypad `3.1.1`; LiquidCrystal_I2C `1.1.4`; Servo `1.3.0`; ArduinoJson `7.4.3`; Crypto `0.4.0`; framework SoftwareSerial `1.0.0`; AVR toolchain `7.3.0` |
 
-The `esp32dev` PlatformIO board profile assumes 4 MB flash; this is not proof
-of the physical board's flash size. Before selecting an ESP32 partition or
-flashing, identify the exact module and query the chip on its confirmed COM
-port:
+Both ESP32 profiles use a 4 MB board assumption. This is not proof of the
+physical board's flash size. The default `esp32dev` image is 1,323,120 bytes
+against a 1,310,720-byte app slot (12,400 bytes too large); do not flash it.
+The UART-only candidate measures 1,323,120 bytes against the 2,031,616-byte
+app slot (708,496 bytes remaining), but use it only if the physical module is
+confirmed compatible with the selected 4 MB layout. Before any upload,
+identify the exact module and query the chip on its confirmed COM port:
 
 ```powershell
 py -3.13 -m platformio device list
@@ -102,20 +108,17 @@ then unplug/reconnect the intended board and confirm which entry disappears
 and returns. Replace `COM7` below with that port; do not assume the same number
 for both boards or future connections.
 
-**ESP32 upload is currently blocked on the default partition.** The clean
-build's `firmware.bin` is 1,322,832 bytes, while the selected app slot is
-1,310,720 bytes. PlatformIO's ELF size summary does not catch this final-image
-overrun. Do not flash the current ESP32 build. See
-`INTEGRATION_TEST_RESULTS.md`; first confirm physical flash capacity and choose
-a compatible partition, then verify the final binary is no larger than its
-app slot. No partition was changed because the physical module is unidentified.
+See [MILESTONE_6_5_ACCEPTANCE.md](./MILESTONE_6_5_ACCEPTANCE.md) for the
+read-only board-ID step, physical UART wiring and acceptance sequence. At this
+time the board is not connected to a recognized ESP32 serial port, so neither
+physical flash size nor the actual target partition is verified.
 
-After board identity, partition fit, wiring, and explicit authorization are
-confirmed, set each variable to its own confirmed port and use:
+After the physical board and 4 MB partition are confirmed, the UART wiring is
+checked, and the owner explicitly authorizes the upload, use the UART-only
+environment. This command is documentation only; it was not run:
 
 ```powershell
-py -3.13 -m platformio run -d hardware\arduino\smart_home_lock -e uno -t upload --upload-port $unoPort
-py -3.13 -m platformio run -d hardware\esp32\smart_home_gateway -e esp32dev -t upload --upload-port $esp32Port
+py -3.13 -m platformio run -d hardware\esp32\smart_home_gateway -e esp32dev_uart_only_4mb -t upload --upload-port $esp32Port
 ```
 
 Monitor the ESP32 USB serial console at 115200 baud:

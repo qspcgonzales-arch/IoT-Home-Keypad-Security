@@ -1,6 +1,6 @@
 #pragma once
 
-#if __has_include("secrets.h")
+#if !defined(UART_ONLY) && __has_include("secrets.h")
 #include "secrets.h"
 #endif
 

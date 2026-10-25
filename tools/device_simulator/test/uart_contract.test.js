@@ -10,6 +10,8 @@ const root = path.join(__dirname, '..', '..', '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const uno = read('hardware/arduino/smart_home_lock/smart_home_lock.ino');
 const esp = read('hardware/esp32/smart_home_gateway/src/main.cpp');
+const espConfig = read('hardware/esp32/smart_home_gateway/src/device_config.h');
+const platformio = read('hardware/esp32/smart_home_gateway/platformio.ini');
 const espClient = read('hardware/esp32/smart_home_gateway/src/firebase_rest_client.cpp');
 const proto = read('hardware/docs/uart_protocol.md');
 const sim = read('tools/device_simulator/device_simulator.js');
@@ -57,6 +59,21 @@ test('UART presence and execution acknowledgements match the firmware contract',
   assert.match(espClient, /status.*executed/);
   assert.match(proto, /PONG/);
   assert.match(proto, /"status":"executed"/);
+});
+
+test('ESP32 reports PING/PONG IDs and stale UART readiness on its serial monitor', () => {
+  assert.match(esp, /UART TX PING %s/);
+  assert.match(esp, /UART RX PONG %s door=%s/);
+  assert.match(esp, /UART OFFLINE \(PONG stale or missing\)/);
+  assert.match(esp, /UART_PING_INTERVAL_MS\s*=\s*1000/);
+  assert.match(esp, /UART_FRESHNESS_MS\s*=\s*3000/);
+});
+
+test('UART-only build omits local Firebase credentials and uses the 4 MB OTA profile', () => {
+  assert.match(espConfig, /!defined\(UART_ONLY\).*__has_include\("secrets\.h"\)/);
+  assert.match(platformio, /\[env:esp32dev_uart_only_4mb\]/);
+  assert.match(platformio, /board_build\.partitions\s*=\s*ota_nofs_4MB\.csv/);
+  assert.match(platformio, /build_flags\s*=\s*-D UART_ONLY=1/);
 });
 
 test('simulator command contract: pending -> accepted -> completed, TTL <= 60 s', () => {

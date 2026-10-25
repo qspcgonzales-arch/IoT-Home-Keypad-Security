@@ -32,10 +32,13 @@ Replies use the `ack` or `nack` format above. State events are:
 {"type":"EVENT","event":"accessGranted|accessDenied|securityLockout|automaticRelock|irProximity"}
 ```
 
-The ESP32 sends `{"type":"PING","pingId":"..."}` once per second. A matching
-`PONG` includes the Uno's logical door state and is required for a fresh UART
-ready heartbeat. The Uno also publishes `STATE locked` when its relock timer
-fires, followed by an `automaticRelock` event.
+The ESP32 sends `{"type":"PING","pingId":"..."}` at a 1-second interval. A
+matching `PONG` includes the Uno's logical door state and is required for UART
+readiness; the ESP32 marks the Arduino offline if no matching PONG arrives
+within 3 seconds. At 115200 baud, the ESP32 Serial Monitor reports each
+transmitted PING, matching PONG/door state, and online/offline transition. The
+Uno also publishes `STATE locked` when its relock timer fires, followed by an
+`automaticRelock` event.
 
 No PIN, PIN hash, Wi-Fi secret, Firebase credential, or service-account data may
 be sent over UART. The gateway maps completed Firebase commands and hardware
@@ -70,6 +73,7 @@ Uno/ESP32 simulators remain compatible.
 - The Uno hashes the `commandId` (32-bit FNV-1a) for its last-16 duplicate check.
 - The protocol is stop-and-wait: the ESP32 waits for the execution acknowledgement before it can claim another command. The Uno can emit `STATE` and `EVENT` lines between replies.
 - `PING`/`PONG` is implemented in the Uno and ESP32 firmware to verify recent UART communication and read the Uno's logical door state.
+- UART readiness uses 1-second PINGs and a 3-second PONG freshness window; ESP32 monitor output exposes each matching exchange.
 - The execution acknowledgement follows the servo command request; it does not verify actual servo position or door/latch movement.
 - Firmware compilation and UART timing remain subject to validation; all physical electrical and actuator behavior is unverified.
 

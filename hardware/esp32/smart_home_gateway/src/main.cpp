@@ -26,6 +26,7 @@ uint32_t pingSequence = 0;
 String outstandingPingId;
 uint64_t lastArduinoSeenEpochMs = 0;
 bool hasValidPong = false;
+bool previousArduinoReady = false;
 bool lineOverflow = false;
 bool doorStateKnown = false;
 bool doorLocked = true;
@@ -79,6 +80,7 @@ void sendPing() {
   ping["pingId"] = outstandingPingId;
   serializeJson(ping, UnoSerial);
   UnoSerial.println();
+  Serial.printf("UART TX PING %s\n", outstandingPingId.c_str());
 }
 
 bool sendUnlockToUno(const CloudCommand &command) {
@@ -125,6 +127,8 @@ void processUnoLine(const String &line) {
     hasValidPong = true;
     doorStateKnown = true;
     doorLocked = reportedDoor == "locked";
+    Serial.printf("UART RX PONG %s door=%s\n", pingId.c_str(),
+                  reportedDoor.c_str());
   } else if (type == "STATE") {
     const String reportedDoor = message["door"] | "";
     if (reportedDoor == "locked" || reportedDoor == "unlocked") {
@@ -174,6 +178,11 @@ void loop() {
   readArduinoUart();
 
   const bool uartReady = arduinoReady();
+  if (uartReady != previousArduinoReady) {
+    Serial.println(uartReady ? "Arduino UART ONLINE (fresh PONG)." :
+                               "Arduino UART OFFLINE (PONG stale or missing).");
+    previousArduinoReady = uartReady;
+  }
   cloud.tick(uartReady, doorStateKnown, doorLocked,
              lastArduinoSeenEpochMs);
 
