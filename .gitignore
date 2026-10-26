@@ -49,8 +49,12 @@ app.*.map.json
 
 # Firmware secrets
 hardware/esp32/**/secrets.h
+staging_firebase_options.json
+database.rules.staging.local.json
+android/app/src/staging/google-services.json
 **/.pio/
 tools/rules_tests/.proposed.rules.json
+tools/rules_tests/.staging.rules.json
 tools/rules_tests/database-debug.log
 tools/rules_tests/.live.rules.json
 tools/rules_tests/firebase.hardware-phone.json

@@ -18,9 +18,15 @@ class FirebaseRealtimeDatabaseService extends DoorService {
     FirebaseAuth? auth,
     DateTime Function()? clock,
     GatewayMode? expectedMode,
+    String administratorUid = FirebaseAuthService.configuredAdministratorUid,
+    String? targetDeviceId,
+    bool remoteHardwareTest = false,
   }) : _database = database ?? FirebaseDatabase.instance,
        _auth = auth ?? FirebaseAuth.instance,
        _clock = clock ?? DateTime.now,
+       _authorizedAdministratorUid = administratorUid,
+       _commandTargetDeviceId = targetDeviceId,
+       _remoteDiagnosticsEnabled = remoteHardwareTest,
        _policy = GatewayPolicy(
          expectedMode: expectedMode ?? GatewayMode.configured,
        ) {
@@ -40,14 +46,27 @@ class FirebaseRealtimeDatabaseService extends DoorService {
         .ref('devices/gateway/mode')
         .onValue
         .listen(_onModeValue, onError: _onDatabaseError);
-    _arduinoConnectedSubscription = _database
-        .ref('devices/gateway/arduinoConnected')
+    _firmwareVersionSubscription = _database
+        .ref('devices/gateway/firmwareVersion')
         .onValue
-        .listen(_onArduinoConnectedValue, onError: _onDatabaseError);
-    _arduinoHeartbeatSubscription = _database
-        .ref('devices/gateway/arduinoLastSeen')
+        .listen(_onFirmwareVersionValue, onError: _onDatabaseError);
+    _sensorSubscription = _database
+        .ref('devices/sensors/irDigitalState')
         .onValue
-        .listen(_onArduinoHeartbeatValue, onError: _onDatabaseError);
+        .listen(_onSensorValue, onError: _onDatabaseError);
+    if (_policy.expectedMode == GatewayMode.hardware) {
+      _arduinoConnectedSubscription = _database
+          .ref('devices/gateway/arduinoConnected')
+          .onValue
+          .listen(_onArduinoConnectedValue, onError: _onDatabaseError);
+      _arduinoHeartbeatSubscription = _database
+          .ref('devices/gateway/arduinoLastSeen')
+          .onValue
+          .listen(_onArduinoHeartbeatValue, onError: _onDatabaseError);
+    } else {
+      _arduinoConnectedLoaded = true;
+      _arduinoHeartbeatLoaded = true;
+    }
     _auditSubscription = newestAuditEvents().onValue.listen(
       _onAuditValue,
       onError: _onDatabaseError,
@@ -78,12 +97,17 @@ class FirebaseRealtimeDatabaseService extends DoorService {
   final FirebaseDatabase _database;
   final FirebaseAuth _auth;
   final DateTime Function() _clock;
+  final String _authorizedAdministratorUid;
+  final String? _commandTargetDeviceId;
+  final bool _remoteDiagnosticsEnabled;
   final GatewayPolicy _policy;
   final List<SecurityEvent> _events = [];
   StreamSubscription<DatabaseEvent>? _doorSubscription;
   StreamSubscription<DatabaseEvent>? _gatewaySubscription;
   StreamSubscription<DatabaseEvent>? _heartbeatSubscription;
   StreamSubscription<DatabaseEvent>? _modeSubscription;
+  StreamSubscription<DatabaseEvent>? _firmwareVersionSubscription;
+  StreamSubscription<DatabaseEvent>? _sensorSubscription;
   StreamSubscription<DatabaseEvent>? _arduinoConnectedSubscription;
   StreamSubscription<DatabaseEvent>? _arduinoHeartbeatSubscription;
   StreamSubscription<DatabaseEvent>? _auditSubscription;
@@ -149,6 +173,15 @@ class FirebaseRealtimeDatabaseService extends DoorService {
   @override
   String? get feedback => _feedback;
   @override
+  String? get irDigitalState => _status.irDigitalState;
+  @override
+  String? get firmwareVersion => _status.firmwareVersion;
+  @override
+  bool get hasSensorStatus =>
+      _status.irDigitalState == 'HIGH' || _status.irDigitalState == 'LOW';
+  @override
+  bool get isRemoteDiagnostic => _remoteDiagnosticsEnabled;
+  @override
   List<SecurityEvent> get events => List.unmodifiable(_events);
   @override
   SecurityEvent? get latestEvent => _events.isEmpty ? null : _events.first;
@@ -156,6 +189,9 @@ class FirebaseRealtimeDatabaseService extends DoorService {
   bool get canSimulateConnectivity => false;
   @override
   bool get isHardware => _status.gatewayMode == GatewayMode.hardware.wireValue;
+  @override
+  bool get isEsp32Only =>
+      _status.gatewayMode == GatewayMode.esp32Only.wireValue;
   @override
   bool get isArduinoReady => _policy.isArduinoHeartbeatFresh(
     reportedConnected: _arduinoConnected,
@@ -168,6 +204,10 @@ class FirebaseRealtimeDatabaseService extends DoorService {
       _isDatabaseConnected &&
       isDeviceReady &&
       _hasDoorStatus &&
+      (_policy.expectedMode != GatewayMode.esp32Only ||
+          (_remoteDiagnosticsEnabled &&
+              _commandTargetDeviceId != null &&
+              _commandTargetDeviceId.isNotEmpty)) &&
       _status.isLocked &&
       !isPending &&
       _remoteUnlockStatus != UnlockCommandStatus.unlocked;
@@ -184,7 +224,7 @@ class FirebaseRealtimeDatabaseService extends DoorService {
       return false;
     }
     final user = _auth.currentUser;
-    if (user == null || user.uid != FirebaseAuthService.administratorUid) {
+    if (user == null || user.uid != _authorizedAdministratorUid) {
       _feedback = 'Only an authorized administrator can change this setting.';
       notifyListeners();
       return false;
@@ -228,7 +268,7 @@ class FirebaseRealtimeDatabaseService extends DoorService {
       return false;
     }
     final user = _auth.currentUser;
-    if (user == null || user.uid != FirebaseAuthService.administratorUid) {
+    if (user == null || user.uid != _authorizedAdministratorUid) {
       _remoteUnlockStatus = UnlockCommandStatus.failed;
       _feedback = 'Command rejected. Administrator authentication required.';
       notifyListeners();
@@ -252,6 +292,9 @@ class FirebaseRealtimeDatabaseService extends DoorService {
       requestedBy: user.uid,
       createdAtMillis: _clock().millisecondsSinceEpoch,
       expiresAtMillis: expiresAt,
+      targetDeviceId: _policy.expectedMode == GatewayMode.esp32Only
+          ? _commandTargetDeviceId
+          : null,
     );
     _currentCommandId = commandId;
     _remoteUnlockStatus = UnlockCommandStatus.pending;
@@ -285,9 +328,18 @@ class FirebaseRealtimeDatabaseService extends DoorService {
   String get _unavailableReason {
     if (!_isDatabaseConnected) return 'Command unavailable: database offline.';
     if (!_policy.modeMatches(_status.gatewayMode)) {
-      return _policy.expectedMode == GatewayMode.hardware
-          ? 'Command unavailable: no authenticated physical device is online.'
-          : 'Command unavailable: no authenticated simulator is online.';
+      return switch (_policy.expectedMode) {
+        GatewayMode.hardware =>
+          'Command unavailable: no authenticated physical device is online.',
+        GatewayMode.esp32Only =>
+          'Command unavailable: no staging ESP32-only device is online.',
+        GatewayMode.simulated =>
+          'Command unavailable: no authenticated simulator is online.',
+      };
+    }
+    if (_policy.expectedMode == GatewayMode.esp32Only &&
+        (_commandTargetDeviceId == null || _commandTargetDeviceId.isEmpty)) {
+      return 'Command unavailable: staging device targeting is not configured.';
     }
     if (isHardware && !isArduinoReady) {
       return 'Command unavailable: Arduino UART has not been verified.';
@@ -343,6 +395,8 @@ class FirebaseRealtimeDatabaseService extends DoorService {
         isLocked: _status.isLocked,
         isOnline: _status.isOnline,
         gatewayMode: _status.gatewayMode,
+        irDigitalState: _status.irDigitalState,
+        firmwareVersion: _status.firmwareVersion,
       );
     }
     _clearAvailabilityFeedbackIfRecovered();
@@ -358,8 +412,40 @@ class FirebaseRealtimeDatabaseService extends DoorService {
       isOnline: _status.isOnline,
       gatewayLastSeenMillis: _status.gatewayLastSeenMillis,
       gatewayMode: value is String ? value : null,
+      irDigitalState: _status.irDigitalState,
+      firmwareVersion: _status.firmwareVersion,
     );
     _clearAvailabilityFeedbackIfRecovered();
+    notifyListeners();
+  }
+
+  void _onFirmwareVersionValue(DatabaseEvent event) {
+    if (_disposed) return;
+    final value = event.snapshot.value;
+    _status = DoorStatus(
+      isLocked: _status.isLocked,
+      isOnline: _status.isOnline,
+      gatewayLastSeenMillis: _status.gatewayLastSeenMillis,
+      gatewayMode: _status.gatewayMode,
+      irDigitalState: _status.irDigitalState,
+      firmwareVersion: value is String ? value : null,
+    );
+    notifyListeners();
+  }
+
+  void _onSensorValue(DatabaseEvent event) {
+    if (_disposed) return;
+    final value = event.snapshot.value;
+    _status = DoorStatus(
+      isLocked: _status.isLocked,
+      isOnline: _status.isOnline,
+      gatewayLastSeenMillis: _status.gatewayLastSeenMillis,
+      gatewayMode: _status.gatewayMode,
+      irDigitalState: value is String && (value == 'HIGH' || value == 'LOW')
+          ? value
+          : null,
+      firmwareVersion: _status.firmwareVersion,
+    );
     notifyListeners();
   }
 
@@ -541,6 +627,8 @@ class FirebaseRealtimeDatabaseService extends DoorService {
     _gatewaySubscription?.cancel();
     _heartbeatSubscription?.cancel();
     _modeSubscription?.cancel();
+    _firmwareVersionSubscription?.cancel();
+    _sensorSubscription?.cancel();
     _arduinoConnectedSubscription?.cancel();
     _arduinoHeartbeatSubscription?.cancel();
     _auditSubscription?.cancel();

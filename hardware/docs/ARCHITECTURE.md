@@ -1,35 +1,42 @@
-# ESP32-only architecture (Milestone 6.6)
+# ESP32-only architecture (Milestones 6.6–6.7)
 
-**This is the new target architecture, not a record of completed physical
-integration.** Wiring, voltage levels, board identity, component behavior, and
-servo mechanics remain unverified. Do not connect to an occupied door, flash
-hardware, connect to Firebase, or remotely actuate a servo as part of this
-offline preparation.
+**The cloud-diagnostics source is prepared but has not been connected to
+Firebase or flashed.** No cloud or physical tests were performed for Milestone
+6.7. Wiring, voltage levels, board identity, and servo power safety still
+require independent verification.
 
 ```text
-Local keypad PIN ───────┐
-                       ├── ESP32-WROOM-32 ── local LCD status
-TCRT5000 digital input ┤                 ├── active buzzer (driver if needed)
-                       │                 └── SG90 signal (separate servo supply)
-                       └── standalone local diagnostics
+                         ┌── local LCD and buzzer
+Keypad, TCRT5000, SG90 ─ ESP32-WROOM-32
+                         ├── local PIN / lockout / relock logic
+                         └── Wi-Fi + TLS + dedicated device Auth
+                                      ↕
+                         Isolated Firebase staging project
+                                      ↕
+                         Flutter staging remote diagnostics
 
-Flutter / Firebase: not connected in the Milestone 6.6 standalone build
-Arduino Uno / UART: not part of the new hardware path
+Arduino Uno / UART: not part of this ESP32-only path
+Remote servo movement: disabled in the cloud-diagnostics profile
+Production Firebase and the local emulator: separate configurations
 ```
 
 The ESP32 directly owns the 4x4 keypad, 16x2 I2C LCD, digital TCRT5000 input,
-active buzzer, and SG90 signal. The standalone firmware has no Wi-Fi, Firebase,
-UART, cloud commands, or actuator acknowledgement path. Local keypad
-verification uses a salted SHA-256 digest with a constant-time comparison;
-the PIN value is neither committed nor logged. Three failed attempts trigger
-a 30-second lockout, a valid local PIN starts a four-second logical unlock,
-and the device automatically relocks.
+active buzzer, and SG90 signal. The local standalone image remains independent
+of Wi-Fi/Firebase. A separate cloud-diagnostics profile adds bounded Wi-Fi
+reconnect, authenticated staging status/audit reporting, and validated
+non-actuating command acknowledgements. It compiles the servo path out.
+Local keypad verification continues to use the provisioned salted SHA-256
+digest and constant-time comparison; PIN values are neither committed,
+transmitted, nor logged. Three failed attempts trigger a 30-second lockout,
+a valid local PIN starts a four-second logical unlock, and the device
+automatically relocks.
 
 ## Firmware paths
 
 | Path | Purpose | Status |
 | --- | --- | --- |
 | `hardware/esp32/esp32_only` | ESP32-only local diagnostic build for this migration | New; offline; physical test pending |
+| `esp32dev_cloud_diagnostics` | ESP32-only staging status, event, and command-rejection profile | Source prepared; requires local credentials and isolated staging setup; servo compiled out |
 | `hardware/esp32/smart_home_gateway` | Existing ESP32/Firebase gateway using Arduino UART PING/PONG | Historical/legacy architecture; do not mix with ESP32-only pin map |
 | `hardware/arduino/smart_home_lock` | Existing Uno keypad/actuator controller and UART endpoint | Historical/legacy architecture; retained unchanged |
 
@@ -93,15 +100,24 @@ connected to an occupied entrance.
 
 ## Cloud migration boundary
 
-No staging project, least-privilege device account, or administrator account
-was supplied for this milestone. The local image intentionally has no cloud
-credentials or network code. Before a separate cloud milestone, preserve the
-existing gateway's Firebase authentication, device identity and registry,
-command expiry/validation, acknowledgement sequence, heartbeat, and audit
-schema while replacing the UART endpoint with explicit local peripheral
-events. Add outage, stale-heartbeat, expiry, and failed-ack tests; begin with
-remote actuation disabled. Do not alter production rules/accounts or Flutter
-as part of the local firmware migration.
+The confirmed staging Firebase project ID is `iothomekeypadsecurity-staging`,
+with separate staging rules and local-only app/device configuration
+templates. The project ID, Realtime Database URL, project number, Android
+application ID, device ID, Auth UIDs, and local credentials are configured;
+the local staging configuration checker passes. The project owner reports an
+initial rules deployment, but the audit-attribution hardening in the current
+source still requires an approved staging-only redeployment. `.firebaserc`
+keeps production as the default and points only the explicit staging alias to
+the staging project; `firebase.json` and production rules remain unchanged. See
+[MILESTONE_6_7_INTEGRATION.md](./MILESTONE_6_7_INTEGRATION.md) for account
+provisioning, validation, and manual setup.
+
+The cloud profile reports the logical lock state, raw IR digital level,
+firmware version, heartbeat, and redacted local security events. It validates
+device targeting and expiry, then marks any valid remote unlock command
+`failed` (or `expired`) with a device acknowledgement and audit event; the
+staging rules reject `accepted`/`completed`. This is connectivity testing,
+not remote unlocking. The older UART gateway remains separate and unchanged.
 
 See [ESP32_ONLY_ACCEPTANCE.md](./ESP32_ONLY_ACCEPTANCE.md) for sequential
 component checks, exact local build/test commands, electrical blockers, and

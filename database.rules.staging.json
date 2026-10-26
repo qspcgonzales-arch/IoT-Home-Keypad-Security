@@ -1,0 +1,151 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "devices": {
+      "frontDoor": {
+        "isLocked": {
+          ".read": "auth != null && (auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2' || (auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true))",
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.isBoolean()"
+        }
+      },
+      "gateway": {
+        ".read": "auth != null && (auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2' || (auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true))",
+        "isOnline": {
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.isBoolean()"
+        },
+        "lastSeen": {
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "mode": {
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.val() === 'esp32_only'"
+        },
+        "deviceId": {
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.val() === 'esp32-frontdoor-1'"
+        },
+        "firmwareVersion": {
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "$other": {
+          ".validate": false
+        }
+      },
+      "sensors": {
+        ".read": "auth != null && (auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2' || (auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true))",
+        "irDigitalState": {
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.val() === 'HIGH' || newData.val() === 'LOW'"
+        },
+        "lastSeen": {
+          ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true",
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "deviceRegistry": {
+      "66BkT43W8tPkWYL8jV4dgroMCbN2": {
+        ".read": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2'",
+        ".write": false,
+        ".validate": "newData.hasChildren(['enabled', 'deviceId']) && newData.child('enabled').val() === true && newData.child('deviceId').val() === 'esp32-frontdoor-1'",
+        "enabled": {
+          ".validate": "newData.val() === true"
+        },
+        "deviceId": {
+          ".validate": "newData.val() === 'esp32-frontdoor-1'"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "settings": {
+      "frontDoor": {
+        "unlockDurationSeconds": {
+          ".read": "auth != null && auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2'",
+          ".write": "auth != null && auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2'",
+          ".validate": "newData.isNumber() && newData.val() >= 4 && newData.val() <= 30 && newData.val() % 1 === 0"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "commands": {
+      ".read": "auth != null && (auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2' || (auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true && query.orderByChild === 'status' && query.equalTo === 'pending' && query.limitToFirst <= 10))",
+      ".indexOn": ["status"],
+      "$commandId": {
+        ".read": "auth != null && auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2'",
+        ".write": "auth != null && ((auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2' && !data.exists() && newData.exists() && newData.child('type').val() === 'unlock' && newData.child('status').val() === 'pending' && newData.child('requestedBy').val() === auth.uid && newData.child('targetDeviceId').val() === 'esp32-frontdoor-1' && newData.child('createdAt').isNumber() && newData.child('createdAt').val() <= now && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 60000) || (auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true && data.exists() && data.child('status').val() === 'pending' && data.child('targetDeviceId').val() === 'esp32-frontdoor-1' && newData.exists() && newData.child('type').val() === data.child('type').val() && newData.child('requestedBy').val() === data.child('requestedBy').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val() && newData.child('targetDeviceId').val() === data.child('targetDeviceId').val() && (newData.child('status').val() === 'failed' || newData.child('status').val() === 'expired') && newData.child('deviceId').val() === 'esp32-frontdoor-1' && newData.child('acknowledgedAt').isNumber() && newData.child('acknowledgedAt').val() <= now + 60000))",
+        ".validate": "newData.hasChildren(['type', 'status', 'requestedBy', 'createdAt', 'expiresAt', 'targetDeviceId']) && newData.child('type').val() === 'unlock' && newData.child('status').isString() && newData.child('requestedBy').val() === 'fyTwhPR5RMek0Bdd40C08McNZmm2' && newData.child('createdAt').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > newData.child('createdAt').val() && newData.child('expiresAt').val() <= newData.child('createdAt').val() + 60000 && newData.child('targetDeviceId').val() === 'esp32-frontdoor-1' && ((newData.child('status').val() === 'pending' && !newData.child('acceptedAt').exists() && !newData.child('acknowledgedAt').exists() && !newData.child('deviceId').exists() && !newData.child('message').exists()) || ((newData.child('status').val() === 'failed' || newData.child('status').val() === 'expired') && newData.hasChildren(['acknowledgedAt', 'deviceId', 'message']) && !newData.child('acceptedAt').exists() && newData.child('deviceId').val() === 'esp32-frontdoor-1'))",
+        "type": {
+          ".validate": "newData.val() === 'unlock'"
+        },
+        "status": {
+          ".validate": "newData.val() === 'pending' || newData.val() === 'failed' || newData.val() === 'expired'"
+        },
+        "requestedBy": {
+          ".validate": "newData.val() === 'fyTwhPR5RMek0Bdd40C08McNZmm2'"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "targetDeviceId": {
+          ".validate": "newData.val() === 'esp32-frontdoor-1'"
+        },
+        "acknowledgedAt": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "deviceId": {
+          ".validate": "newData.val() === 'esp32-frontdoor-1'"
+        },
+        "message": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "auditLogs": {
+      ".read": "auth != null && auth.uid === 'fyTwhPR5RMek0Bdd40C08McNZmm2'",
+      ".indexOn": ["timestamp"],
+      "$eventId": {
+        ".write": "auth != null && auth.uid === '66BkT43W8tPkWYL8jV4dgroMCbN2' && root.child('deviceRegistry').child(auth.uid).child('enabled').val() === true && newData.exists() && (!data.exists() || (newData.child('type').val() === data.child('type').val() && newData.child('description').val() === data.child('description').val() && newData.child('timestamp').val() === data.child('timestamp').val() && newData.child('commandId').val() === data.child('commandId').val() && newData.child('actorUid').val() === data.child('actorUid').val() && newData.child('requestedBy').val() === data.child('requestedBy').val()))",
+        ".validate": "newData.hasChildren(['type', 'description', 'timestamp', 'commandId', 'actorUid']) && (newData.child('type').val() === 'remoteUnlock' || newData.child('type').val() === 'automaticRelock' || newData.child('type').val() === 'commandFailed' || newData.child('type').val() === 'commandExpired' || newData.child('type').val() === 'accessGranted' || newData.child('type').val() === 'accessDenied' || newData.child('type').val() === 'securityLockout') && newData.child('actorUid').val() === '66BkT43W8tPkWYL8jV4dgroMCbN2' && (!newData.child('requestedBy').exists() || (newData.child('requestedBy').val() === 'fyTwhPR5RMek0Bdd40C08McNZmm2' && newData.child('commandId').isString() && root.child('commands').child(newData.child('commandId').val()).child('requestedBy').val() === 'fyTwhPR5RMek0Bdd40C08McNZmm2'))",
+        "type": {
+          ".validate": "newData.isString()"
+        },
+        "description": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        },
+        "commandId": {
+          ".validate": "newData.isString() && newData.val().length <= 128"
+        },
+        "actorUid": {
+          ".validate": "newData.val() === '66BkT43W8tPkWYL8jV4dgroMCbN2'"
+        },
+        "requestedBy": {
+          ".validate": "newData.val() === 'fyTwhPR5RMek0Bdd40C08McNZmm2'"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

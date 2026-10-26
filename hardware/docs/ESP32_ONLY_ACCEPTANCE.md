@@ -1,10 +1,11 @@
 # Milestone 6.6 — ESP32-only local acceptance
 
-**Status: source and offline-build preparation only.** No firmware was flashed,
-no component was physically tested, no servo was actuated, and no Firebase
-connection or command was made. The user-provided wiring has not been
-independently observed. This procedure is for an unoccupied bench setup only;
-do not connect a latch, door, or occupied entrance.
+**Status: preparation only.** Milestone 6.7 source changes were not flashed and
+no cloud connection or command was made. The Milestone 6.6 component and servo
+passes were reported by the user but have not been independently verified in
+this workspace. The user-provided wiring has not been independently observed.
+This procedure is for an unoccupied bench setup only; do not connect a latch,
+door, or occupied entrance.
 
 ## Architecture and scope
 
@@ -26,6 +27,13 @@ It permits local arming only after the keypad, LCD, sensor, and buzzer checks
 have all been confirmed. A valid local PIN then operates the unloaded servo.
 This environment is only prepared for a later, separately approved,
 supervised bench test; it is not a remote-control target.
+
+Milestone 6.7 adds a separate `esp32dev_cloud_diagnostics` profile. It keeps
+the local keypad/PIN logic, reports only to a separately configured staging
+project, and compiles servo actuation out. The standalone environment remains
+offline, and the supervised servo environment remains a local-only profile.
+See [MILESTONE_6_7_INTEGRATION.md](./MILESTONE_6_7_INTEGRATION.md) for the
+cloud project setup and test procedure.
 
 ## Pin assignments
 
@@ -176,25 +184,20 @@ remotely. Be ready to disconnect servo power immediately on unexpected
 motion, heat, noise, or current. This document does not authorize flashing,
 energizing, or movement.
 
-## Cloud integration blockers and migration
+## Milestone 6.7 cloud boundary
 
-The new standalone project deliberately has no Wi-Fi, Firebase, credentials,
-UART, cloud command polling, remote actuation, acknowledgement, or audit
-writer. Do not point it at production or staging.
+Only `esp32dev_cloud_diagnostics` contains Wi-Fi/Firebase code. Its local
+configuration is ignored, TLS uses the ESP32 certificate bundle, and
+authentication requires a dedicated device UID distinct from the staging
+administrator. The profile only accepts commands targeted at its configured
+device, checks creation/expiry timestamps, and acknowledges them as
+`failed`/`expired`; it never calls the servo path. Staging rules prohibit
+`accepted` and `completed` command states.
 
-Before a later cloud integration:
-
-- Specify and approve an isolated staging Firebase project and distinct
-  least-privilege administrator/device identities; none are provided here.
-- Integrate network/authentication without embedding administrator credentials.
-- Preserve the existing device identity/registry checks, command expiry and
-  validation, duplicate handling, acknowledgement lifecycle, heartbeat, and
-  audit schema in a separately tested ESP32-only client.
-- Report lock state as *reported* state, not proof of physical bolt position;
-  define sensor semantics and safe behavior on stale connectivity.
-- Keep physical unlock actuation disabled for initial cloud connectivity tests.
-- Add tests for network loss, stale heartbeat, expired commands, and failed
-  acknowledgements before any remote actuator path is enabled.
-- Re-run the offline build/size check and all software tests. Do not change
-  Flutter, production Firebase rules, or production accounts as part of this
-  local migration.
+The project owner reports that the initial staging rules were deployed. The
+updated audit-attribution rules in the current source still require an
+approved staging-only redeployment. Verify the registry entry in the staging
+database before device sign-in. The local configuration checker passes, but
+no physical ESP32 cloud sign-in or heartbeat has been observed here. No
+firmware was flashed and no hardware operation was performed in this
+workspace.

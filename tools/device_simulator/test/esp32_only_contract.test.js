@@ -29,7 +29,10 @@ test('ESP32-only firmware uses the reviewed GPIO map and avoids GPIO12', () => {
 test('standalone diagnostic target excludes networking and servo actuation', () => {
   assert.match(platformio, /\[env:esp32dev_standalone\][\s\S]*?-D SERVO_TEST_BUILD=0/);
   assert.match(platformio, /board_build\.partitions = ota_nofs_4MB\.csv/);
-  assert.doesNotMatch(firmware, /#include\s*[<"](?:WiFi|Firebase|HTTPClient)/i);
+  assert.match(
+    firmware,
+    /#if ESP32_CLOUD_DIAGNOSTICS\s+#include "firebase_diagnostics.h"\s+#endif/,
+  );
   assert.doesNotMatch(firmware, /WiFi\.begin|FirebaseAuth|FirebaseClient|HTTPClient/i);
   assert.match(firmware, /pinMode\(SERVO_PIN, OUTPUT\);\s*digitalWrite\(SERVO_PIN, LOW\);/);
   const setupBody = firmware.match(/void setup\(\) \{([\s\S]*?)\n\}/)[1];

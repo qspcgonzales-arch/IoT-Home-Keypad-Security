@@ -1,3 +1,4 @@
 /src/pin_config.h
+/src/secrets.h
 .pio/
 .vscode/

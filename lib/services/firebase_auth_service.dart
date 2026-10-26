@@ -13,12 +13,18 @@ class AuthServiceException implements Exception {
 
 class FirebaseAuthService implements AuthService {
   /// UI gate paired with the same UID restriction in Realtime Database rules.
-  static const administratorUid = 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3';
+  static const productionAdministratorUid = 'ERxtj2dQuQRvv3Duw8Ud4DNMErD3';
+  static const configuredAdministratorUid = String.fromEnvironment(
+    'FIREBASE_ADMIN_UID',
+    defaultValue: productionAdministratorUid,
+  );
 
-  FirebaseAuthService({FirebaseAuth? auth})
-    : _auth = auth ?? FirebaseAuth.instance;
+  FirebaseAuthService({FirebaseAuth? auth, String? administratorUid})
+    : _auth = auth ?? FirebaseAuth.instance,
+      administratorUid = administratorUid ?? configuredAdministratorUid;
 
   final FirebaseAuth _auth;
+  final String administratorUid;
 
   @override
   String? get currentUserEmail => _auth.currentUser?.email;

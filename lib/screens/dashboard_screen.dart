@@ -16,9 +16,16 @@ class DashboardScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.lock_open, color: AppTheme.navy),
-        title: const Text('Unlock the door?'),
+        title: Text(
+          service.isRemoteDiagnostic ? 'Send a test command?' : 'Unlock the door?',
+        ),
         content: Text(
-          service.isSimulated
+          service.isRemoteDiagnostic
+              ? 'This staging command checks Firebase delivery and device '
+                    'acknowledgement only. Remote servo actuation is disabled '
+                    'in the ESP32 diagnostic firmware; no physical movement '
+                    'is expected.'
+              : service.isSimulated
               ? 'The local simulator will acknowledge the request, unlock for '
                     '${service.unlockDurationSeconds} seconds, then relock automatically.'
               : 'The authorized device will process this secure command.',
@@ -30,7 +37,9 @@ class DashboardScreen extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Unlock'),
+            child: Text(
+              service.isRemoteDiagnostic ? 'Send test command' : 'Unlock',
+            ),
           ),
         ],
       ),
@@ -55,9 +64,13 @@ class DashboardScreen extends StatelessWidget {
           ? const Color(0xFF16794B)
           : const Color(0xFFB54708);
       final expectsHardware = GatewayMode.configured == GatewayMode.hardware;
-      final gatewayModeMatches = expectsHardware
-          ? service.isHardware
-          : service.isSimulated;
+      final expectsEsp32Only =
+          GatewayMode.configured == GatewayMode.esp32Only;
+      final gatewayModeMatches = switch (GatewayMode.configured) {
+        GatewayMode.hardware => service.isHardware,
+        GatewayMode.esp32Only => service.isEsp32Only,
+        GatewayMode.simulated => service.isSimulated,
+      };
       final gatewayLabel = service.isLoading
           ? 'LOADING'
           : !service.isDatabaseConnected
@@ -82,9 +95,16 @@ class DashboardScreen extends StatelessWidget {
         UnlockCommandStatus.accepted => 'COMMAND PENDING',
         UnlockCommandStatus.unlocked => 'UNLOCKED',
         UnlockCommandStatus.failed ||
-        UnlockCommandStatus.expired => 'Retry remote unlock',
+        UnlockCommandStatus.expired =>
+          service.isRemoteDiagnostic
+              ? 'Retry test command'
+              : 'Retry remote unlock',
         null =>
-          !service.isLocked && service.hasDoorStatus
+          service.isRemoteDiagnostic
+              ? service.canRequestUnlock
+                    ? 'Send test command (no motion)'
+                    : 'Test command unavailable'
+              : !service.isLocked && service.hasDoorStatus
               ? 'Door unlocked'
               : service.canRequestUnlock
               ? 'Remote unlock'
@@ -93,6 +113,20 @@ class DashboardScreen extends StatelessWidget {
       return ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
+          if (service.isRemoteDiagnostic)
+            Card(
+              color: const Color(0xFFFFF4E5),
+              child: const ListTile(
+                leading: Icon(Icons.science_outlined, color: Color(0xFFB54708)),
+                title: Text(
+                  'REMOTE HARDWARE TEST',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  'Staging diagnostics only. Remote servo actuation is disabled.',
+                ),
+              ),
+            ),
           Text(
             'Good to see you',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -173,6 +207,14 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  if (service.isRemoteDiagnostic) ...[
+                    const Text(
+                      'Reported logical state; this does not prove the physical bolt position.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppTheme.muted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -253,6 +295,8 @@ class DashboardScreen extends StatelessWidget {
                               ? 'LOCAL DEMO — not connected to Firebase'
                               : expectsHardware
                               ? 'HARDWARE TEST — physical gateway expected'
+                              : expectsEsp32Only
+                              ? 'ESP32-only cloud diagnostics'
                               : service.isHardware
                               ? 'ESP32 gateway (hardware mode)'
                               : service.isSimulated
@@ -270,6 +314,8 @@ class DashboardScreen extends StatelessWidget {
                               ? 'PHYSICAL • waiting for matching hardware mode'
                               : service.isSimulated
                               ? 'SIMULATED • command acknowledgements enabled'
+                              : expectsEsp32Only
+                              ? 'REMOTE TEST • command handling only; no servo movement'
                               : service.isHardware
                               ? service.isArduinoReady
                                     ? 'PHYSICAL • Arduino UART verified'
@@ -291,6 +337,32 @@ class DashboardScreen extends StatelessWidget {
               ),
             ),
           ),
+          if (expectsEsp32Only || service.hasSensorStatus) ...[
+            const SizedBox(height: 10),
+            Card(
+              child: ListTile(
+                leading: const Icon(
+                  Icons.sensors_outlined,
+                  color: AppTheme.navy,
+                ),
+                title: const Text('TCRT5000 digital output'),
+                subtitle: Text(
+                  service.firmwareVersion == null
+                      ? 'ESP32 firmware version unavailable'
+                      : 'Firmware ${service.firmwareVersion}',
+                ),
+                trailing: StatusBadge(
+                  label: service.hasSensorStatus
+                      ? service.irDigitalState!
+                      : 'UNKNOWN',
+                  color: service.hasSensorStatus
+                      ? const Color(0xFF16794B)
+                      : AppTheme.muted,
+                  icon: Icons.sensors,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Text(
             'Latest activity',

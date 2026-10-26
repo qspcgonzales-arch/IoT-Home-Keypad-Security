@@ -1,0 +1,11 @@
+{
+  "FIREBASE_ENV": "staging",
+  "FIREBASE_PROJECT_ID": "iothomekeypadsecurity-staging",
+  "FIREBASE_API_KEY": "REPLACE_WITH_STAGING_ANDROID_WEB_API_KEY",
+  "FIREBASE_APP_ID": "REPLACE_WITH_COMPLETE_STAGING_ANDROID_APP_ID",
+  "FIREBASE_MESSAGING_SENDER_ID": "637464771451",
+  "FIREBASE_DATABASE_URL": "https://iothomekeypadsecurity-staging-default-rtdb.asia-southeast1.firebasedatabase.app",
+  "FIREBASE_ADMIN_UID": "fyTwhPR5RMek0Bdd40C08McNZmm2",
+  "FIREBASE_DEVICE_ID": "esp32-frontdoor-1",
+  "GATEWAY_MODE": "esp32_only"
+}

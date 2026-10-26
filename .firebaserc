@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "smart-home-security-tip"
+    "default": "smart-home-security-tip",
+    "staging": "iothomekeypadsecurity-staging"
   }
 }

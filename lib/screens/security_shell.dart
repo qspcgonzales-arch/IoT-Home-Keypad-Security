@@ -12,11 +12,13 @@ class SecurityShell extends StatefulWidget {
     required this.email,
     required this.doorService,
     required this.onLogout,
+    this.remoteHardwareTest = false,
   });
 
   final String email;
   final DoorService doorService;
   final VoidCallback onLogout;
+  final bool remoteHardwareTest;
 
   @override
   State<SecurityShell> createState() => _SecurityShellState();
@@ -43,7 +45,7 @@ class _SecurityShellState extends State<SecurityShell> {
               _ => 'Settings',
             }, style: const TextStyle(fontWeight: FontWeight.w700)),
             Text(
-              widget.email,
+              widget.remoteHardwareTest ? 'REMOTE HARDWARE TEST' : widget.email,
               style: const TextStyle(fontSize: 12, color: AppTheme.muted),
             ),
           ],

@@ -3,7 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
-import 'firebase_options.dart';
 import 'screens/hardware_test_setup_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/security_shell.dart';
@@ -11,6 +10,7 @@ import 'services/door_service.dart';
 import 'services/demo_auth_service.dart';
 import 'services/firebase_emulator_host.dart';
 import 'services/firebase_auth_service.dart';
+import 'services/firebase_build_config.dart';
 import 'services/firebase_realtime_database_service.dart';
 import 'services/mock_door_service.dart';
 import 'theme/app_theme.dart';
@@ -24,7 +24,17 @@ const _firebaseEmulatorProjectId = 'demo-smart-home';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final buildConfig = FirebaseBuildConfig.current;
   if (_hardwareTestBuild) {
+    if (buildConfig.isStaging) {
+      runApp(
+        const _FirebaseConfigurationRequiredApp(
+          message: 'Staging and the local hardware-test emulator build cannot '
+              'be combined.',
+        ),
+      );
+      return;
+    }
     if (_configuredGatewayMode != 'hardware') {
       runApp(const _HardwareTestConfigurationRequiredApp());
       return;
@@ -38,8 +48,23 @@ Future<void> main() async {
     return;
   }
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(SmartHomeSecurityApp(authService: FirebaseAuthService()));
+  final configurationError = buildConfig.validationError;
+  if (configurationError != null) {
+    runApp(_FirebaseConfigurationRequiredApp(message: configurationError));
+    return;
+  }
+
+  await Firebase.initializeApp(options: buildConfig.firebaseOptions);
+  runApp(
+    SmartHomeSecurityApp(
+      authService: FirebaseAuthService(
+        administratorUid: buildConfig.effectiveAdministratorUid,
+      ),
+      administratorUid: buildConfig.effectiveAdministratorUid,
+      targetDeviceId: buildConfig.effectiveDeviceId,
+      remoteHardwareTest: buildConfig.isRemoteHardwareTest,
+    ),
+  );
 }
 
 Future<void> _connectToFirebaseEmulator(String host) async {
@@ -115,17 +140,63 @@ class _HardwareTestConfigurationRequiredApp extends StatelessWidget {
   );
 }
 
+class _FirebaseConfigurationRequiredApp extends StatelessWidget {
+  const _FirebaseConfigurationRequiredApp({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Firebase Configuration Required',
+    home: Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'FIREBASE CONFIGURATION BLOCKED',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(message, textAlign: TextAlign.center),
+                const SizedBox(height: 8),
+                const Text(
+                  'Firebase was not initialized. This build will not fall back '
+                  'to production or the local emulator.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class SmartHomeSecurityApp extends StatefulWidget {
   const SmartHomeSecurityApp({
     super.key,
     required this.authService,
     this.hardwareTestBuild = false,
     this.startInDemoMode = false,
+    this.administratorUid = FirebaseAuthService.productionAdministratorUid,
+    this.targetDeviceId,
+    this.remoteHardwareTest = false,
   });
 
   final AuthService authService;
   final bool hardwareTestBuild;
   final bool startInDemoMode;
+  final String administratorUid;
+  final String? targetDeviceId;
+  final bool remoteHardwareTest;
 
   @override
   State<SmartHomeSecurityApp> createState() => _SmartHomeSecurityAppState();
@@ -144,7 +215,11 @@ class _SmartHomeSecurityAppState extends State<SmartHomeSecurityApp> {
     _demoMode = widget.startInDemoMode;
     _doorService =
         !_demoMode && widget.authService is FirebaseAuthService && authorized
-        ? FirebaseRealtimeDatabaseService()
+        ? FirebaseRealtimeDatabaseService(
+            administratorUid: widget.administratorUid,
+            targetDeviceId: widget.targetDeviceId,
+            remoteHardwareTest: widget.remoteHardwareTest,
+          )
         : MockDoorService();
     _signedInEmail = _demoMode
         ? DemoAuthService.demoEmail
@@ -165,7 +240,11 @@ class _SmartHomeSecurityAppState extends State<SmartHomeSecurityApp> {
         widget.authService is FirebaseAuthService &&
         widget.authService.isAuthorizedAdministrator) {
       _doorService.dispose();
-      _doorService = FirebaseRealtimeDatabaseService();
+      _doorService = FirebaseRealtimeDatabaseService(
+        administratorUid: widget.administratorUid,
+        targetDeviceId: widget.targetDeviceId,
+        remoteHardwareTest: widget.remoteHardwareTest,
+      );
     }
     setState(() => _signedInEmail = email);
   }
@@ -207,6 +286,7 @@ class _SmartHomeSecurityAppState extends State<SmartHomeSecurityApp> {
             email: _signedInEmail!,
             doorService: _doorService,
             onLogout: _signOut,
+            remoteHardwareTest: widget.remoteHardwareTest,
           ),
   );
 }

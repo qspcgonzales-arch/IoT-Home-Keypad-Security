@@ -5,10 +5,12 @@
   "description": "Realtime Database emulator tests for production and PROPOSED security rules. Nothing here deploys rules.",
   "scripts": {
     "pretest:proposed": "node -e \"require('fs').copyFileSync('../../database.rules.proposed.json','.proposed.rules.json')\"",
+    "pretest:staging": "node -e \"const fs=require('fs');const source=fs.existsSync('../../database.rules.staging.local.json')?'../../database.rules.staging.local.json':'../../database.rules.staging.json';fs.copyFileSync(source,'.staging.rules.json')\"",
     "test:proposed": "firebase emulators:exec --only database --project demo-smart-home --config firebase.test.json \"node --test test/proposed.test.js\"",
+    "test:staging": "firebase emulators:exec --only database --project demo-smart-home --config firebase.staging.test.json \"node --test test/staging.test.js\"",
     "test:lifecycle": "firebase emulators:exec --only database --project demo-smart-home --config firebase.test.json \"node --test test/lifecycle.test.js\"",
     "test:device-client": "firebase emulators:exec --only auth,database --project demo-smart-home --config firebase.test.json \"node --test test/device_client.integration.test.js\"",
-    "test": "npm run test:proposed && npm run test:lifecycle && npm run test:device-client"
+    "test": "npm run test:proposed && npm run test:staging && npm run test:lifecycle && npm run test:device-client"
   },
   "engines": { "node": ">=20" },
   "devDependencies": {

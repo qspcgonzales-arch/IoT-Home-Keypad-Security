@@ -7,6 +7,7 @@ void main() {
       expect(GatewayMode.parse(null), GatewayMode.simulated);
       expect(() => GatewayMode.parse('HARDWARE'), throwsFormatException);
       expect(GatewayMode.parse('hardware'), GatewayMode.hardware);
+      expect(GatewayMode.parse('esp32_only'), GatewayMode.esp32Only);
       expect(GatewayMode.configured, GatewayMode.simulated);
     });
   });
@@ -35,6 +36,18 @@ void main() {
       expect(fresh(false, now), isFalse);
       expect(fresh(true, now - 31000), isFalse);
       expect(fresh(true, now + 31000), isFalse);
+    });
+
+    test('connection loss immediately reports offline', () {
+      const now = 1000000;
+      expect(
+        hw.isHeartbeatFresh(
+          reportedOnline: false,
+          lastSeenMillis: now,
+          nowMillis: now,
+        ),
+        isFalse,
+      );
     });
 
     test('Arduino readiness requires a fresh positive UART heartbeat', () {

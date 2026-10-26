@@ -3,7 +3,8 @@
 /// between modes on its own.
 enum GatewayMode {
   simulated('simulated'),
-  hardware('hardware');
+  hardware('hardware'),
+  esp32Only('esp32_only');
 
   const GatewayMode(this.wireValue);
 

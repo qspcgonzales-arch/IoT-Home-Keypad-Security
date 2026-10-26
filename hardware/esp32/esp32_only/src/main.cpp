@@ -8,8 +8,16 @@
 #define SERVO_TEST_BUILD 0
 #endif
 
+#ifndef ESP32_CLOUD_DIAGNOSTICS
+#define ESP32_CLOUD_DIAGNOSTICS 0
+#endif
+
 #if SERVO_TEST_BUILD
 #include <ESP32Servo.h>
+#endif
+
+#if ESP32_CLOUD_DIAGNOSTICS
+#include "firebase_diagnostics.h"
 #endif
 
 #if __has_include("pin_config.h")
@@ -54,6 +62,10 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 Servo lockServo;
 #endif
 
+#if ESP32_CLOUD_DIAGNOSTICS
+FirebaseDiagnostics cloudDiagnostics;
+#endif
+
 enum class ComponentTest : uint8_t { None, Keypad, Lcd, Sensor, Buzzer };
 
 char enteredPin[PIN_LENGTH + 1] = {};
@@ -80,6 +92,15 @@ uint32_t sensorCandidateSince = 0;
 char serialLine[48] = {};
 uint8_t serialLineLength = 0;
 bool serialLineOverflow = false;
+
+void reportSecurityEvent(const String &type, const String &description) {
+#if ESP32_CLOUD_DIAGNOSTICS
+  cloudDiagnostics.recordEvent(type, description);
+#else
+  (void)type;
+  (void)description;
+#endif
+}
 
 void secureZero(void *memory, size_t length) {
   volatile uint8_t *bytes = static_cast<volatile uint8_t *>(memory);
@@ -180,6 +201,7 @@ bool attachServoForUnlock() {
 #endif
 
 bool setDoorLocked(bool locked, uint32_t now) {
+  const bool wasLocked = doorLocked;
 #if SERVO_TEST_BUILD
   if (!locked && servoArmed && !lockServo.attached() &&
       !attachServoForUnlock()) {
@@ -193,6 +215,10 @@ bool setDoorLocked(bool locked, uint32_t now) {
     if (servoArmed && lockServo.attached()) lockServo.write(LOCKED_ANGLE);
 #endif
     Serial.println("Door state: locked");
+    if (!wasLocked) {
+      reportSecurityEvent("automaticRelock",
+                          "ESP32 automatically relocked after local keypad access.");
+    }
   } else {
     unlockAt = now + DEFAULT_UNLOCK_MS;
 #if SERVO_TEST_BUILD
@@ -220,6 +246,8 @@ bool lockoutActive(uint32_t now) {
 void denyPin(uint32_t now) {
   clearEnteredPin();
   ++failedAttempts;
+  reportSecurityEvent("accessDenied",
+                      "ESP32 local keypad authentication failed.");
   digitalWrite(BUZZER_PIN, HIGH);
   delay(120);
   digitalWrite(BUZZER_PIN, LOW);
@@ -229,6 +257,8 @@ void denyPin(uint32_t now) {
     failedAttempts = 0;
     lockoutUntil = now + LOCKOUT_MS;
     Serial.println("Security lockout started for 30 seconds");
+    reportSecurityEvent("securityLockout",
+                        "ESP32 local keypad entered a 30-second security lockout.");
   }
   showLockedScreen();
 }
@@ -242,6 +272,8 @@ void handleEnteredPin(uint32_t now) {
   }
   failedAttempts = 0;
   Serial.println("PIN accepted; no PIN value recorded");
+  reportSecurityEvent("accessGranted",
+                      "ESP32 local keypad access granted.");
   if (!setDoorLocked(false, now)) {
     Serial.println("Door remains logically locked.");
   }
@@ -469,7 +501,13 @@ void setup() {
     lcd.print("Access disabled");
   }
 
+#if ESP32_CLOUD_DIAGNOSTICS
+  Serial.println("ESP32-only local diagnostics with staging cloud reporting.");
+  Serial.println("Cloud diagnostics profile selected; remote servo actuation is compiled out.");
+  cloudDiagnostics.begin();
+#else
   Serial.println("ESP32-only local diagnostics; Wi-Fi/Firebase are not included.");
+#endif
   Serial.println(hasProvisionedPin()
                      ? "PIN verifier provisioned."
                      : "PIN verifier unavailable; access fails closed.");
@@ -485,5 +523,8 @@ void loop() {
   pollKeypad(now);
   lockoutActive(now);
   if (!doorLocked && reached(now, unlockAt)) setDoorLocked(true, now);
+#if ESP32_CLOUD_DIAGNOSTICS
+  cloudDiagnostics.tick(doorLocked, sensorStable == HIGH);
+#endif
   delay(1);
 }

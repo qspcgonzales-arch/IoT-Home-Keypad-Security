@@ -12,11 +12,16 @@ abstract class DoorService extends ChangeNotifier {
   bool get isDatabaseConnected;
   bool get isSimulated;
   bool get isHardware => false;
+  bool get isEsp32Only => false;
   bool get isArduinoReady => false;
+  bool get isRemoteDiagnostic => false;
   bool get isDeviceReady => isOnline && (!isHardware || isArduinoReady);
   bool get hasDoorStatus;
   bool get hasGatewayStatus;
   String? get feedback;
+  String? get irDigitalState => null;
+  String? get firmwareVersion => null;
+  bool get hasSensorStatus => irDigitalState != null;
   List<SecurityEvent> get events;
   SecurityEvent? get latestEvent;
   bool get canSimulateConnectivity;

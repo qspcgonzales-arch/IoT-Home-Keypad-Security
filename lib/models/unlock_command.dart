@@ -8,6 +8,7 @@ class UnlockCommand {
     required this.requestedBy,
     required this.createdAtMillis,
     required this.expiresAtMillis,
+    this.targetDeviceId,
     this.message,
   });
 
@@ -17,21 +18,26 @@ class UnlockCommand {
   final String requestedBy;
   final int createdAtMillis;
   final int expiresAtMillis;
+  final String? targetDeviceId;
   final String? message;
 
-  Map<String, Object?> toDatabaseRecord({required Object serverTimestamp}) => {
-    'type': type,
-    'status': switch (status) {
-      UnlockCommandStatus.pending => 'pending',
-      UnlockCommandStatus.accepted => 'accepted',
-      UnlockCommandStatus.unlocked => 'completed',
-      UnlockCommandStatus.failed => 'failed',
-      UnlockCommandStatus.expired => 'expired',
-    },
-    'requestedBy': requestedBy,
-    'createdAt': serverTimestamp,
-    'expiresAt': expiresAtMillis,
-  };
+  Map<String, Object?> toDatabaseRecord({required Object serverTimestamp}) {
+    final record = <String, Object?>{
+      'type': type,
+      'status': switch (status) {
+        UnlockCommandStatus.pending => 'pending',
+        UnlockCommandStatus.accepted => 'accepted',
+        UnlockCommandStatus.unlocked => 'completed',
+        UnlockCommandStatus.failed => 'failed',
+        UnlockCommandStatus.expired => 'expired',
+      },
+      'requestedBy': requestedBy,
+      'createdAt': serverTimestamp,
+      'expiresAt': expiresAtMillis,
+    };
+    if (targetDeviceId != null) record['targetDeviceId'] = targetDeviceId;
+    return record;
+  }
 
   static UnlockCommandStatus? parseStatus(Object? value) => switch (value) {
     'pending' => UnlockCommandStatus.pending,
