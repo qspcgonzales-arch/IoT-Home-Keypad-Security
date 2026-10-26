@@ -325,6 +325,22 @@ test('unknown identity cannot read or write staging data', async () => {
   await assertFails(set(ref(db, 'auditLogs/forged'), auditEvent()));
 });
 
+test('registered device can query an empty pending command list', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await set(ref(context.database(), 'commands'), null);
+  });
+
+  const result = await get(
+    query(
+      ref(as(DEVICE), 'commands'),
+      orderByChild('status'),
+      equalTo('pending'),
+      limitToFirst(10),
+    ),
+  );
+  assert.equal(result.val(), null);
+});
+
 test('disabling the registry entry immediately revokes device data access', async () => {
   await seed({
     deviceRegistry: {

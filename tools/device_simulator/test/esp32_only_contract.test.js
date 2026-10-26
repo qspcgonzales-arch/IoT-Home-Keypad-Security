@@ -5,9 +5,18 @@ const test = require('node:test');
 
 const root = path.resolve(__dirname, '..', '..', '..');
 const firmwarePath = path.join(root, 'hardware', 'esp32', 'esp32_only', 'src', 'main.cpp');
+const diagnosticsPath = path.join(
+  root,
+  'hardware',
+  'esp32',
+  'esp32_only',
+  'src',
+  'firebase_diagnostics.cpp',
+);
 const platformioPath = path.join(root, 'hardware', 'esp32', 'esp32_only', 'platformio.ini');
 const acceptancePath = path.join(root, 'hardware', 'docs', 'ESP32_ONLY_ACCEPTANCE.md');
 const firmware = fs.readFileSync(firmwarePath, 'utf8');
+const diagnostics = fs.readFileSync(diagnosticsPath, 'utf8');
 const platformio = fs.readFileSync(platformioPath, 'utf8');
 const acceptance = fs.readFileSync(acceptancePath, 'utf8');
 
@@ -72,4 +81,33 @@ test('GPIO34 remains input-only without an internal pull resistor', () => {
   assert.match(firmware, /pinMode\(SENSOR_PIN, INPUT\)/);
   assert.doesNotMatch(firmware, /pinMode\(SENSOR_PIN,\s*INPUT_PULL(?:UP|DOWN)\)/);
   assert.match(acceptance, /defined 3\.3 V-compatible level/i);
+});
+
+test('cloud command polling accepts empty results and diagnoses failures safely', () => {
+  const processBody = diagnostics.match(
+    /bool FirebaseDiagnostics::processPendingCommand\(\) \{([\s\S]*?)\n\}/,
+  )?.[1];
+  assert.ok(processBody, 'processPendingCommand implementation exists');
+  assert.match(
+    processBody,
+    /databaseRequest\("GET", "commands", query, "", response\)/,
+  );
+  assert.match(
+    diagnostics,
+    /orderBy=%22status%22&equalTo=%22pending%22&limitToFirst=10/,
+  );
+  assert.match(processBody, /code == 401 \|\| code == 403/);
+  assert.match(processBody, /Staging command query transport failed/);
+  assert.match(processBody, /Staging command query denied/);
+  assert.match(processBody, /Staging command query failed \(HTTP %d\)/);
+  assert.match(processBody, /parseError\.c_str\(\)/);
+  assert.ok(
+    processBody.indexOf('commands.isNull()') <
+      processBody.indexOf('commands.is<JsonObjectConst>()'),
+    'JSON null is handled as an empty command list before object validation',
+  );
+  assert.doesNotMatch(
+    processBody,
+    /Serial\.(?:print|printf)\([^;\n]*(?:response|url|token|password|api.?key)/i,
+  );
 });

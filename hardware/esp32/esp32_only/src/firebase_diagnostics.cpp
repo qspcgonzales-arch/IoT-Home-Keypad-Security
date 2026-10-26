@@ -185,16 +185,22 @@ String FirebaseDiagnostics::databaseUrl(const String &path,
 int FirebaseDiagnostics::sendRequest(const String &method, const String &url,
                                      const String &payload, String &response,
                                      const char *contentType) {
+  WiFiClientSecure client;
   HTTPClient http;
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
-  WiFiClientSecure client;
   client.setHandshakeTimeout(5);
   client.useBuiltinCACertBundle();
-  if (!http.begin(client, url)) return HTTPC_ERROR_CONNECTION_REFUSED;
+  if (!http.begin(client, url)) {
+    Serial.println("Staging HTTPS request setup failed.");
+    return HTTPC_ERROR_CONNECTION_REFUSED;
+  }
   http.addHeader("Accept", "application/json");
   if (contentType != nullptr) http.addHeader("Content-Type", contentType);
   const int code = http.sendRequest(method.c_str(), payload);
+  if (code < 0) {
+    Serial.printf("Staging HTTPS transport failed (code %d).\n", code);
+  }
   if (code > 0) response = http.getString();
   http.end();
   return code;
@@ -577,11 +583,31 @@ bool FirebaseDiagnostics::processPendingCommand() {
   const String query =
       "orderBy=%22status%22&equalTo=%22pending%22&limitToFirst=10";
   String response;
-  if (!databaseGet("commands", query, response)) return false;
+  const int code = databaseRequest("GET", "commands", query, "", response);
+  if (!httpSuccess(code)) {
+    if (code < 0) {
+      Serial.printf("Staging command query transport failed (code %d).\n",
+                    code);
+    } else if (code == 401 || code == 403) {
+      Serial.printf(
+          "Staging command query denied (HTTP %d; authentication or permission).\n",
+          code);
+    } else {
+      Serial.printf("Staging command query failed (HTTP %d).\n", code);
+    }
+    return false;
+  }
+
   JsonDocument commands;
-  if (deserializeJson(commands, response) ||
-      !commands.is<JsonObjectConst>()) {
-    Serial.println("Staging command query returned invalid JSON.");
+  const DeserializationError parseError = deserializeJson(commands, response);
+  if (parseError) {
+    Serial.printf("Staging command query JSON parse failed (HTTP %d; %s).\n",
+                  code, parseError.c_str());
+    return false;
+  }
+  if (commands.isNull()) return true;
+  if (!commands.is<JsonObjectConst>()) {
+    Serial.println("Staging command query returned unexpected JSON shape (HTTP 200).");
     return false;
   }
 

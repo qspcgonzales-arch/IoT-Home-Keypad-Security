@@ -202,6 +202,34 @@ Get-Item hardware\esp32\esp32_only\.pio\build\esp32dev_cloud_diagnostics\firmwar
 This is only a build-partition check; it does not verify the physical board's
 flash or authorize upload.
 
+The cloud diagnostics HTTPS helper must declare `WiFiClientSecure` before
+`HTTPClient`: `HTTPClient` borrows the client and its destructor stops it. C++
+destroys locals in reverse declaration order, so reversing these declarations
+can leave `HTTPClient` calling through a destroyed client's vtable when
+leaving the request helper. HTTPS setup/transport diagnostics must not print
+request URLs, payloads, or tokens.
+
+Command polling reads `commands` with `orderBy=status`, `equalTo=pending`, and
+`limitToFirst=10`. An HTTP 200 JSON `null` is a valid empty result; non-success
+HTTP statuses, transport failures, JSON parse errors, and unexpected JSON
+shapes are reported as distinct redacted categories. The staging command read
+rule is bounded to this registered-device query; do not widen it to fix
+client-side parsing issues.
+
+For an owner-supervised cloud-profile reflash on the confirmed board only,
+build and inspect the image first, then explicitly run:
+
+```powershell
+py -3.13 -m platformio run -d hardware\esp32\esp32_only -e esp32dev_cloud_diagnostics
+py -3.13 -m platformio run -d hardware\esp32\esp32_only -e esp32dev_cloud_diagnostics -t upload --upload-port COM4
+py -3.13 -m platformio device monitor -d hardware\esp32\esp32_only --port COM4 --baud 115200
+```
+
+The upload command writes the board and is intentionally not part of local
+validation. Confirm the cloud diagnostics profile and servo-compiled-out
+message in the serial monitor; do not run the supervised servo-test profile
+for this cloud connection check.
+
 Build the staging APK only after the staging Android JSON and local Dart
 options match:
 
